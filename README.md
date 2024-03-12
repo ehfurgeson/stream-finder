@@ -7,6 +7,8 @@
 - [Running Locally](#running-locally)
 - [Uploading Large Files](#uploading-large-files)
 - [Debugging Some Basic Errors](#debugging-some-basic-errors)
+- [Virtual Environments and Dependency Tracking](#virtual-environments-and-dependency-tracking)
+- [Troubleshooting](#troubleshooting)
 - [General comments from the author](#general-comments-from-the-author)
 
 ## Summary
@@ -90,6 +92,28 @@ You can change data in this file to your project's json data, but do not delete 
 - Alternatively, checking the console will tell you what error it is. If it's a 401, then logging in and out should fix it. 
 - If it isn't a 401, first try checking the logs or container status. Check if the containers are alive or not, which could cause issues. If the containers are down, try stopping and starting them. If that does not work, you can report it on ED.
 - If data isn't important, destroying and then cloning and re-building containers will usually fix the issue (assuming there's no logical error)
+
+## Virtual Environments and Dependency Tracking
+- It's essential to avoid uploading your virtual environments, as they can significantly inflate the size of your project. Large repositories will lead to issues during cloning, especially when memory limits are crossed (Limit – 2GB). 
+To prevent your virtual environment from being tracked and uploaded to GitHub, follow these steps:
+1. **Exclude Virtual Environment**
+   - Navigate to your project's root directory and locate the `.gitignore` file. 
+   - Add the name of your virtual environment directory to this file in the following format: `<virtual_environment_name>/`. This step ensures that Git ignores the virtual environment folder during commits.
+
+2. **Remove Previously Committed Virtual Environment**
+   - If you've already committed your virtual environment to the repository, you can remove it from the remote repository by using Git commands to untrack and delete it. You will find resources online to do so.
+Afterward, ensure to follow step 1 to prevent future tracking of virtual environment.
+
+3. **Managing Dependencies**
+    - Add all the new libraries you downloaded using pip install for your project to the existing `requirements.txt` file. To do so,
+    - Navigate to your project backend directory and run the command `pip freeze > requirements.txt`. This command will create or overwrite the `requirements.txt` file with a list of installed packages and their versions. 
+    - Our server will use your project’s `requirements.txt` file to install all required packages, ensuring that your project runs seamlessly.
+
+## Troubleshooting
+
+The attached google document includes a compilation of frequent issues encountered by students across various project stages, detailing whether these issues have been resolved and the solutions that were effective. We will continue to update this list with new information.
+
+Link: https://docs.google.com/document/d/1sF2zsubii_SYJLfZN02UB9FvtH1iLmi9xd-X4wbpbo8
 
 ## General comments from the author
 
