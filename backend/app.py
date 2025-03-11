@@ -21,6 +21,7 @@ with open(json_file_path, 'r') as file:
     episodes_df = pd.DataFrame(data['episodes'])
     reviews_df = pd.DataFrame(data['reviews'])
 
+# Test comment during tutorial
 app = Flask(__name__)
 CORS(app)
 
