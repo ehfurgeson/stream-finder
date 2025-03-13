@@ -1,0 +1,12 @@
+# Core packages
+pandas
+matplotlib
+praw
+twikit
+wordcloud
+requests
+beautifulsoup4
+certifi
+
+# Note: The following standard library packages are already included with Python:
+# datetime, asyncio, os, re, ssl, time, csv, configparser, random, logging
