@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 import re
+import json
 
 STREAMERS = [
     "Kai Cenat", "Ninja", "xQc", "Ibai Llanos", "AuronPlay",
@@ -27,24 +28,27 @@ def get_wikipedia_summary(streamer_name):
         return "Failed to retrieve Wikipedia page."
 
 def compile_streamer_wikipedia():
-    """Compile Wikipedia summaries for top 10 streamers."""
+    """Compile Wikipedia summaries for top 10 streamers and save as JSON."""
     data = []
     for streamer in STREAMERS:
         print(f"Scraping Wikipedia summary for {streamer}...")
         summary = get_wikipedia_summary(streamer)
         data.append({"streamer": streamer, "wikipedia_summary": summary})
     
-    df = pd.DataFrame(data)
-    df.to_csv("top_streamers_wikipedia.csv", index=False)
-    print("Dataset saved as top_streamers_wikipedia.csv")
+    with open("top_streamers_wikipedia.json", "w", encoding="utf-8") as json_file:
+        json.dump(data, json_file, ensure_ascii=False, indent=4)
+    
+    print("Dataset saved as top_streamers_wikipedia.json")
 
 def generate_word_cloud():
     """Generates a word cloud from the Wikipedia summaries."""
-    df = pd.read_csv("top_streamers_wikipedia.csv")
-    text = " ".join(df["wikipedia_summary"].dropna().astype(str))
+    with open("top_streamers_wikipedia.json", "r", encoding="utf-8") as json_file:
+        data = json.load(json_file)
+    
+    text = " ".join([entry["wikipedia_summary"] for entry in data if entry["wikipedia_summary"] != "Failed to retrieve Wikipedia page"])
     
     text = re.sub(r'http\S+|www\S+', '', text)  
-    text = re.sub(r'[^A-Za-z0-9 ]+', '', text) 
+    text = re.sub(r'[^A-Za-z0-9 ]+', '', text)  
     
     wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text)
     
