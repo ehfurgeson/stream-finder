@@ -46,7 +46,7 @@ async def main():
         return df['Name'].tolist()
 
 # Usage:
-    streamers= load_streamers_csv('top_1000_twitch.csv')
+    streamers= load_streamers_csv('400to600.csv')
 
 
     # Path to the twitter.json file (guaranteed to exist)
