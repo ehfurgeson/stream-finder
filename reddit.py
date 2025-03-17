@@ -1,79 +1,79 @@
 import pandas as pd
-import matplotlib.pyplot as plt
 import logging
-logging.basicConfig(level=logging.DEBUG)
-
 import ssl
 import certifi
-ssl._create_default_https_context = ssl.create_default_context(cafile=certifi.where())
-
 import praw
 import re
-from wordcloud import WordCloud, STOPWORDS
 import datetime
+import json
+import time
 
-# Define the query for Reddit search
-QUERY = "Kai Cenat"
+logging.basicConfig(level=logging.DEBUG)
+ssl._create_default_https_context = ssl.create_default_context(cafile=certifi.where())
 
-# Initialize Reddit client with your credentials
-reddit = praw.Reddit(client_id='01QZ_xjftNaD37KztVGK6w',
-                     client_secret='O3eYDfW96Y_Ccm1y8KcCYHksBfdmIw',
-                     user_agent='StreamFinderApp/0.1 by JavaScript1202')
+def scrape_reddit_for_streamer(streamer, max_posts=500):
+    """
+    Scrape top Reddit posts mentioning the streamer from the past year.
+    Returns a list of dictionaries containing post info.
+    """
+    reddit = praw.Reddit(client_id='01QZ_xjftNaD37KztVGK6w',
+                         client_secret='O3eYDfW96Y_Ccm1y8KcCYHksBfdmIw',
+                         user_agent='StreamFinderApp/0.1 by JavaScript1202')
+    
+    posts = []
+    one_year_ago = datetime.datetime.now() - datetime.timedelta(days=365)
+    
+    for post in reddit.subreddit('all').search(streamer, sort='top', time_filter='year', limit=max_posts):
+        post_date = datetime.datetime.fromtimestamp(post.created_utc)
+        if post_date >= one_year_ago:
+            posts.append({
+                "Title": post.title,
+                "Score": post.score,
+                "ID": post.id,
+                "Created": post.created_utc
+            })
+    return posts
 
-reddit_posts = []
-max_posts = 500  # sample size
+def update_reddit_json(streamer, posts, json_filename="reddit.json"):
+    """
+    Loads an existing JSON file (or creates an empty dict if not found or empty),
+    appends the scraped posts for the streamer (avoiding duplicates), and writes the data back.
+    """
+    try:
+        with open(json_filename, 'r') as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {}
 
-# Calculate timestamp for one year ago (365 days)
-one_year_ago = datetime.datetime.now() - datetime.timedelta(days=365)
+    # Append posts if the streamer exists, or add a new key otherwise.
+    if streamer in data:
+        existing_ids = {p["ID"] for p in data[streamer]}
+        new_posts = [p for p in posts if p["ID"] not in existing_ids]
+        data[streamer].extend(new_posts)
+    else:
+        data[streamer] = posts
 
-# Search Reddit for posts mentioning the query; sort by top posts within the past year.
-# Then filter manually to include only posts from the last year.
-for post in reddit.subreddit('all').search(QUERY, sort='top', time_filter='year', limit=max_posts):
-    post_date = datetime.datetime.fromtimestamp(post.created_utc)
-    if post_date >= one_year_ago:
-        reddit_posts.append([post.title, post.score, post.id, post.created_utc])
+    with open(json_filename, 'w') as f:
+        json.dump(data, f, indent=2)
+    print(f"Updated {json_filename} with data for streamer: {streamer}")
 
-# Create a DataFrame for Reddit posts
-reddit_df = pd.DataFrame(reddit_posts, columns=['Title', 'Score', 'ID', 'Created'])
 
-# Save the scraped data to a CSV file (this will replace the file if it exists)
-reddit_csv_filename = "kai_cenat_reddit.csv"
-reddit_df.to_csv(reddit_csv_filename, index=False)
-print(f"Reddit data saved to {reddit_csv_filename}")
+def main():
+    # Read the CSV file that contains the top 1000 streamers
+    df = pd.read_csv("top_1000_twitch.csv")
+    
+    # Iterate over each streamer in the CSV (assuming column 'Name' contains streamer names)
+    for idx, row in df.iterrows():
+        streamer = row["Name"].strip()
+        print(f"\nProcessing streamer: {streamer}")
+        
+        posts = scrape_reddit_for_streamer(streamer)
+        print(f"Scraped {len(posts)} posts for {streamer}")
+        
+        update_reddit_json(streamer, posts)
+        
+        # Optional: pause between requests to be polite to Reddit's servers.
+        time.sleep(2)
 
-# --- Word Cloud Generation ---
-# Concatenate all post titles into one large string
-text = " ".join(reddit_df["Title"].astype(str).tolist())
-
-# Clean text: remove URLs and punctuation
-text = re.sub(r"http\S+", "", text)  # Remove URLs
-text = re.sub(r"[^\w\s]", "", text)    # Remove punctuation
-
-# Process the query to form stopwords
-all_query_terms = QUERY.split()
-main_search_terms = [term.strip() for term in all_query_terms 
-                     if term.upper() != "OR" and not term.startswith("lang:")]
-
-# Define additional irrelevant terms to exclude from the word cloud
-additional_stopwords = {"streamer", "streaming", "stream", "twitch"}
-
-# Combine the default STOPWORDS with the query terms and additional stopwords
-custom_stopwords = STOPWORDS.union(main_search_terms, additional_stopwords)
-
-# Generate the word cloud object using the custom stopwords
-wordcloud = WordCloud(width=800,
-                      height=400,
-                      background_color="white",
-                      stopwords=custom_stopwords,
-                      collocations=False).generate(text)
-
-# Plot and save the word cloud
-plt.figure(figsize=(10, 5))
-plt.imshow(wordcloud, interpolation="bilinear")
-plt.axis("off")
-plt.title("Word Cloud for Kai Cenat Reddit Titles (Last Year)")
-plt.tight_layout()
-plt.savefig("reddit_wordcloud.png")
-plt.show()
-
-print("Word cloud generated and saved as 'reddit_wordcloud.png'")
+if __name__ == "__main__":
+    main()
