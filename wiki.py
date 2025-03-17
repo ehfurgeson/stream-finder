@@ -1,20 +1,22 @@
-import requests
-from bs4 import BeautifulSoup
+import time
+import random
+import json
+import re
 import pandas as pd
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
-import re
-import json
+import requests
+from bs4 import BeautifulSoup
 
-STREAMERS = [
-    "Kai Cenat", "Ninja", "xQc", "Ibai Llanos", "AuronPlay",
-    "Shroud", "Pokimane", "Rubius", "Dr DisRespect", "Ludwig Ahgren"
-]
+# Import the Twitch scraper function
+from top_scraper import scrape_twitch_streamers
 
 def get_wikipedia_summary(streamer_name):
     """Scrape Wikipedia summary using BeautifulSoup."""
     url = f"https://en.wikipedia.org/wiki/{streamer_name.replace(' ', '_')}"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
     
     response = requests.get(url, headers=headers)
     
@@ -28,13 +30,18 @@ def get_wikipedia_summary(streamer_name):
         return "Failed to retrieve Wikipedia page."
 
 def compile_streamer_wikipedia():
-    """Compile Wikipedia summaries for top 10 streamers and save as JSON."""
+    """Scrape Wikipedia summaries for the top Twitch streamers and save as JSON."""
+    # Get the top 1000 streamers
+    streamers_df = scrape_twitch_streamers(num_pages=20)
+
     data = []
-    for streamer in STREAMERS:
+    for _, row in streamers_df.iterrows():
+        streamer = row["Name"]
         print(f"Scraping Wikipedia summary for {streamer}...")
         summary = get_wikipedia_summary(streamer)
         data.append({"streamer": streamer, "wikipedia_summary": summary})
     
+    # Save data to a JSON file
     with open("top_streamers_wikipedia.json", "w", encoding="utf-8") as json_file:
         json.dump(data, json_file, ensure_ascii=False, indent=4)
     
@@ -58,5 +65,7 @@ def generate_word_cloud():
     plt.title("Word Cloud for Top Streamers Wikipedia Summaries")
     plt.show()
 
-compile_streamer_wikipedia()
-generate_word_cloud()
+# Run the script
+if __name__ == "__main__":
+    compile_streamer_wikipedia()
+    generate_word_cloud()
