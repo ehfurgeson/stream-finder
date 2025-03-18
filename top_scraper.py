@@ -9,7 +9,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
-def scrape_twitch_streamers(num_pages=20, base_url="https://twitchtracker.com/channels/ranking", delay_range=(1, 3)):
+def scrape_twitch_streamers(num_pages=20, base_url="https://twitchtracker.com/channels/ranking/english", delay_range=(1, 3)):
     """
     Scrape top Twitch streamers from TwitchTracker using Selenium.
     
