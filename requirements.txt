@@ -1,12 +1,9 @@
 # Core packages
-pandas
-matplotlib
-praw
+pandas>=1.3.0
+matplotlib>=3.4.0
+praw>=7.0.0
 twikit
-wordcloud
-requests
-beautifulsoup4
-certifi
-
-# Note: The following standard library packages are already included with Python:
-# datetime, asyncio, os, re, ssl, time, csv, configparser, random, logging
+wordcloud>=1.8.1
+requests>=2.25.0
+beautifulsoup4>=4.9.3
+certifi>=2020.12.5
