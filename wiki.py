@@ -2,65 +2,78 @@ import time
 import json
 import pandas as pd
 import wikipedia
-import wikipediaapi
+import requests
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from top_scraper import scrape_twitch_streamers  # Import the Twitch scraper
 
 def format_streamer_name(name):
     """Format streamer name for better Wikipedia matching."""
-    formatted_name = name.replace("_", " ").title()  # Convert to title case
-    return formatted_name
+    return name.replace("_", " ").title()
 
-def get_wikipedia_summary(streamer_name):
-    """Fetch Wikipedia summary using the Wikipedia API."""
+def get_wikipedia_summary_selenium(streamer_name):
+    """Use Selenium to find and scrape Wikipedia summary from Google search."""
     formatted_name = format_streamer_name(streamer_name)
-
+    search_query = f"{formatted_name} wikipedia"
+    
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+    driver.get("https://www.google.com")
+    
+    search_box = driver.find_element(By.NAME, "q")
+    search_box.send_keys(search_query)
+    search_box.send_keys(Keys.RETURN)
+    time.sleep(2)
+    
+    # Find first Wikipedia link
+    links = driver.find_elements(By.CSS_SELECTOR, "a")
+    wiki_url = None
+    for link in links:
+        href = link.get_attribute("href")
+        if href and "wikipedia.org/wiki/" in href:
+            wiki_url = href
+            break
+    
+    driver.quit()
+    
+    if not wiki_url:
+        return "Wikipedia page not found."
+    
+    # Scrape Wikipedia summary
     try:
-        # Try to get the exact Wikipedia page
-        summary = wikipedia.summary(formatted_name, sentences=3)
-        return summary
-
-    except wikipedia.DisambiguationError as e:
-        # If multiple results exist, pick the first one
-        print(f"DisambiguationError for {formatted_name}, selecting first option: {e.options[0]}")
-        try:
-            summary = wikipedia.summary(e.options[0], sentences=3)
-            return summary
-        except Exception as inner_e:
-            print(f"Failed to resolve disambiguation: {inner_e}")
-            return "Disambiguation error, unable to fetch summary."
-
-    except wikipedia.PageError:
-        # If no exact match, search Wikipedia for similar names
-        print(f"No exact match for {formatted_name}, searching Wikipedia...")
-        search_results = wikipedia.search(formatted_name)
-
-        if search_results:
-            try:
-                summary = wikipedia.summary(search_results[0], sentences=3)  # Use first search result
-                return summary
-            except Exception as search_e:
-                print(f"Failed on search fallback: {search_e}")
-                return "Search error, unable to fetch summary."
-
-        return "Failed to retrieve Wikipedia page."
-
+        response = requests.get(wiki_url)
+        soup = BeautifulSoup(response.text, "html.parser")
+        paragraphs = soup.select("p")
+        for para in paragraphs:
+            text = para.get_text().strip()
+            if text:
+                return text[:500]  # Limit to first 500 characters
     except Exception as e:
         print(f"Error fetching Wikipedia page for {formatted_name}: {e}")
         return "Error retrieving Wikipedia page."
 
 def compile_streamer_wikipedia():
-    """Scrape Wikipedia summaries for the top Twitch streamers and save as JSON."""
-    # Get the top 1000 streamers
+    """Scrape Wikipedia summaries for the top Twitch streamers using Selenium."""
     print("Fetching top Twitch streamers from TwitchTracker...")
     streamers_df = scrape_twitch_streamers(num_pages=20)
-
+    
     data = []
     for _, row in streamers_df.iterrows():
         streamer = row["Name"]
         formatted_streamer = format_streamer_name(streamer)
         
         print(f"Fetching Wikipedia summary for {formatted_streamer}...")
-        summary = get_wikipedia_summary(formatted_streamer)
+        summary = get_wikipedia_summary_selenium(formatted_streamer)
 
         data.append({
             "streamer": streamer,
@@ -80,14 +93,14 @@ def generate_word_cloud():
         with open("top_streamers_wikipedia.json", "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
         
-        text = " ".join([entry["wikipedia_summary"] for entry in data if entry["wikipedia_summary"] != "Failed to retrieve Wikipedia page"])
+        text = " ".join([entry["wikipedia_summary"] for entry in data if "Wikipedia page not found" not in entry["wikipedia_summary"]])
         
         from wordcloud import WordCloud
         import matplotlib.pyplot as plt
         import re
 
-        text = re.sub(r'http\S+|www\S+', '', text)  
-        text = re.sub(r'[^A-Za-z0-9 ]+', '', text)  
+        text = re.sub(r'http\S+|www\S+', '', text)  # Remove URLs
+        text = re.sub(r'[^A-Za-z0-9 ]+', '', text)  # Remove special characters
         
         wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text)
         
