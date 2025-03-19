@@ -5,6 +5,7 @@ import requests
 from bs4 import BeautifulSoup
 import wikipediaapi
 from googlesearch import search
+import random
 
 def read_streamers_from_csv(file_path="top_1000_twitch.csv"):
     """Read streamer names from CSV file."""
@@ -50,9 +51,60 @@ def fetch_wikipedia_content(streamer_name):
     
     return None
 
+def fetch_google_search_content(streamer_name, retries=3, backoff_factor=2):
+    """Fetch content from the first Google Search result with retries and exponential backoff."""
+    query = f"{streamer_name} twitch wikipedia"
+    url = None
+    for attempt in range(retries):
+        try:
+            # Use googlesearch to find the first result
+            for url in search(query, num_results=1):
+                print(f"Scraping content from: {url}")
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124'}
+                response = requests.get(url, headers=headers, timeout=10)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.content, 'html.parser')
+                content = soup.get_text(separator='\n', strip=True)
+                return {
+                    "url": url,
+                    "content": content[:5000],  # Limit content size for practicality
+                    "source": "Google Search"
+                }
+            return {
+                "url": None,
+                "content": "No relevant content found.",
+                "source": "Google Search"
+            }
+        except requests.HTTPError as e:
+            if e.response.status_code == 429:
+                # Exponential backoff
+                wait_time = backoff_factor ** attempt
+                print(f"429 Too Many Requests. Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            else:
+                print(f"HTTP error fetching content for {streamer_name}: {e}")
+                return {
+                    "url": url if url else None,
+                    "content": f"Error: {str(e)}",
+                    "source": "Google Search"
+                }
+        except Exception as e:
+            print(f"Error fetching content for {streamer_name}: {e}")
+            return {
+                "url": url if url else None,
+                "content": f"Error: {str(e)}",
+                "source": "Google Search"
+            }
+    
+    # If all retries fail, return an error message
+    return {
+        "url": None,
+        "content": "Error: Too many retries. Falling back to news search.",
+        "source": "Google Search"
+    }
+
 def fetch_news_info(streamer_name):
     """Fetch news content about the streamer from a web search."""
-    # Adjusted query to target news-like content without tbm
     query = f"{streamer_name} streamer news site:*.com | site:*.org | site:*.edu -inurl:(signup login wikipedia)"
     url = None
     try:
@@ -114,8 +166,13 @@ def compile_streamer_wikipedia():
         result = fetch_wikipedia_content(streamer)
         
         if result is None:
-            print(f"No Wikipedia page found for {streamer}, falling back to news search...")
-            result = fetch_news_info(streamer)
+            print(f"No Wikipedia page found for {streamer}, falling back to Google Search...")
+            result = fetch_google_search_content(streamer)
+            
+            # If Google Search fails (e.g., due to 429 errors), fall back to news search
+            if result["content"].startswith("Error:"):
+                print(f"Google Search failed for {streamer}, falling back to news search...")
+                result = fetch_news_info(streamer)
         
         data.append({
             "streamer": streamer,
@@ -127,7 +184,10 @@ def compile_streamer_wikipedia():
         update_json_file(data)
         print(f"Updated wikipage.json with {streamer}")
         
-        time.sleep(5 + (hash(str(time.time())) % 5))
+        # Random delay between 5 to 15 seconds to avoid being flagged as a bot
+        delay = random.randint(5, 15)
+        print(f"Waiting for {delay} seconds before the next request...")
+        time.sleep(delay)
 
     print("Dataset fully processed and saved as wikipage.json")
 
