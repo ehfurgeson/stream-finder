@@ -1,9 +1,11 @@
 import json
 import os
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 from helpers.MySQLDatabaseHandler import MySQLDatabaseHandler
 import pandas as pd
+from collections import defaultdict
+import re
 
 # ROOT_PATH for linking with all your files. 
 # Feel free to use a config.py or settings.py with a global export variable
@@ -11,37 +13,168 @@ os.environ['ROOT_PATH'] = os.path.abspath(os.path.join("..",os.curdir))
 
 # Get the directory of the current script
 current_directory = os.path.dirname(os.path.abspath(__file__))
+parent_directory = os.path.dirname(current_directory)
 
-# Specify the path to the JSON file relative to the current script
-json_file_path = os.path.join(current_directory, 'init.json')
+# specify the path to the json file relative to the current script
+reddit_json_path = os.path.join(parent_directory, "reddit.json")
+twitter_json_path = os.path.join(parent_directory, "twitter.json")
+wiki_json_path = os.path.join(parent_directory, "wiki.json")
 
-# Assuming your JSON data is stored in a file named 'init.json'
-with open(json_file_path, 'r') as file:
-    data = json.load(file)
-    episodes_df = pd.DataFrame(data['episodes'])
-    reviews_df = pd.DataFrame(data['reviews'])
+# load the json data
+with open(reddit_json_path, "r") as file:
+    reddit_data = json.load(file)
 
-# Test comment during tutorial
+with open(twitter_json_path, "r") as file:
+    twitter_data = json.load(file)
+
+with open(wiki_json_path, "r") as file:
+    wiki_data = json.load(file)
+
+# create inverted index for boolean search (temporary solution for prototype)
+def create_index():
+    index = defaultdict(list)
+    for streamer, data in reddit_data.items():
+        for i, post in enumerate(data):
+            title = post["Title"].lower()
+            words = re.findall(r"\w+", title)
+            for word in words:
+                index[word].append(("reddit", streamer, i))
+    for streamer, tweets in twitter_data.items():
+        for i, tweet in enumerate(tweets):
+            tweet_text = tweet.lower()
+            words = re.findall(r"\w+", tweet_text)
+            for word in words:
+                index[word].append(("twitter", streamer, i))
+    for i, entry in enumerate(wiki_data):
+        if entry["wikipedia_summary"] != "Search error, unable to fetch summary.":
+            summary = entry["wikipedia_summary"].lower()
+            words = re.findall(r"\w+", summary)
+            for word in words:
+                index[word].append(("wiki", entry["streamer"], i))
+    return index
+
+# simple search function for prototype
+def search(query, index):
+    query = query.strip().lower()
+    terms = re.findall(r"\w+", query)
+
+    if not terms:
+        return []
+    
+    doc_matches = defaultdict(int)
+    doc_info = {}
+
+    for term in terms:
+        if term in index:
+            for doc in index[term]:
+                source, streamer, idx = doc
+                doc_id = f"{source}:{streamer}:{idx}"
+                doc_matches[doc_id] += 1
+
+                if doc_id not in doc_info:
+                    if source == "reddit":
+                        doc_info[doc_id] = {
+                            "source": "reddit",
+                            "streamer": streamer,
+                            "data": reddit_data[streamer][idx],
+                            "text": reddit_data[streamer][idx]["Title"],
+                            "score": reddit_data[streamer][idx]["Score"],
+                            "idx": idx
+                        }
+                    elif source == "twitter":
+                        doc_info[doc_id] = {
+                            "source": "twitter",
+                            "streamer": streamer,
+                            "data": twitter_data[streamer][idx],
+                            "text": twitter_data[streamer][idx],
+                            "score": 1,  # Default score for tweets
+                            "idx": idx
+                        }
+                    elif source == "wiki":
+                        doc_info[doc_id] = {
+                            "source": "wiki",
+                            "streamer": streamer,
+                            "data": wiki_data[idx],
+                            "text": wiki_data[idx]["wikipedia_summary"],
+                            "score": 5,  # Default score for wiki entries
+                            "idx": idx
+                        }
+    results = []
+    for doc_id, match_count in doc_matches.items():
+        doc = doc_info[doc_id]
+        doc["term_matches"] = match_count
+        results.append(doc)
+    return results
+
+def score_results(results, query):
+    query_terms = set(re.findall(r"\w+", query.lower()))
+    scored_results = []
+    
+    for doc in results:
+        score = 0
+        text = doc["text"].lower()
+        
+        term_match_score = doc.get("term_matches", 0) * 15
+        score += term_match_score
+        
+        for term in query_terms:
+            count = text.count(term.lower())
+            score += count * 5
+        
+        if doc["source"] == "reddit":
+            reddit_score_boost = min(doc["score"] / 500, 20)
+            score += reddit_score_boost
+        elif doc["source"] == "wiki":
+            score += 15
+        
+        if " ".join(query_terms) in text.lower():
+            score += 50
+        
+        formatted_doc = {
+            "source": doc["source"],
+            "streamer": doc["streamer"],
+            "text": doc["text"],
+            "relevance_score": round(score, 2)
+        }
+        
+        if doc["source"] == "reddit":
+            formatted_doc["reddit_score"] = doc["score"]
+            formatted_doc["id"] = doc["data"]["ID"]
+        
+        scored_results.append((formatted_doc, score))
+    
+    scored_results.sort(key = lambda x: x[1], reverse = True)
+    
+    return [doc for doc, _ in scored_results]
+
 app = Flask(__name__)
 CORS(app)
 
-# Sample search using json with pandas
-def json_search(query):
-    matches = []
-    merged_df = pd.merge(episodes_df, reviews_df, left_on='id', right_on='id', how='inner')
-    matches = merged_df[merged_df['title'].str.lower().str.contains(query.lower())]
-    matches_filtered = matches[['title', 'descr', 'imdb_rating']]
-    matches_filtered_json = matches_filtered.to_json(orient='records')
-    return matches_filtered_json
+search_index = create_index()
 
 @app.route("/")
 def home():
-    return render_template('base.html',title="sample html")
+    return render_template("base.html", title = "Streamer Search")
 
 @app.route("/episodes")
-def episodes_search():
-    text = request.args.get("title")
-    return json_search(text)
+def search_streamer():
+    query = request.args.get("title", "")
+    if not query:
+        return jsonify([])
+    
+    raw_results = search(query, search_index)
+    
+    scored_results = score_results(raw_results, query)[:10]
+    
+    transformed_results = []
+    for result in scored_results:
+        transformed_results.append({
+            "title": result["streamer"],
+            "descr": result["text"][:150] + "..." if len(result["text"]) > 150 else result["text"],
+            "imdb_rating": result["relevance_score"] 
+        })
+    
+    return jsonify(transformed_results)
 
-if 'DB_NAME' not in os.environ:
-    app.run(debug=True,host="0.0.0.0",port=5000)
+if __name__ == "__main__":
+    app.run(debug = True, host = "0.0.0.0", port = 5000)

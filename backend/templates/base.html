@@ -7,7 +7,7 @@
 <body>
     <div class="full-body-container">
         <div class="top-text">
-            <img style = "width: 25vw;" src="{{ url_for('static', filename='images/logo.png') }}" />
+            <img style = "width: 20vw;" src="{{ url_for('static', filename='images/logo.png') }}" />
             <div class="input-box" onclick="sendFocus()">
                 <img src="{{ url_for('static', filename='images/mag.png') }}" />
                 <input placeholder="Search for a Twitch streamer" id="filter-text-val" onkeyup="filterText()">
@@ -24,7 +24,7 @@
             return `<div class=''>
                 <h3 class='episode-title'>${title}</h3>
                 <p class='episode-desc'>${titleDesc}</p>
-                <p class='episode-rating'>IMDB Rating: ${rating}</p>
+                <p class='episode-rating'>sim score: ${rating}</p>
             </div>`
         }
 
