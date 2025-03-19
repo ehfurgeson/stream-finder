@@ -9,26 +9,22 @@ import re
 
 # ROOT_PATH for linking with all your files. 
 # Feel free to use a config.py or settings.py with a global export variable
-os.environ['ROOT_PATH'] = os.path.abspath(os.path.join("..",os.curdir))
+os.environ["ROOT_PATH"] = os.path.abspath(os.path.join("..", os.curdir))
 
 # Get the directory of the current script
 current_directory = os.path.dirname(os.path.abspath(__file__))
-parent_directory = os.path.dirname(current_directory)
 
 # specify the path to the json file relative to the current script
-reddit_json_path = os.path.join(parent_directory, "reddit.json")
-twitter_json_path = os.path.join(parent_directory, "twitter.json")
-wiki_json_path = os.path.join(parent_directory, "wiki.json")
+json_path = os.path.join(current_directory, "init.json")
 
 # load the json data
-with open(reddit_json_path, "r") as file:
-    reddit_data = json.load(file)
+with open(json_path, "r") as file:
+    combined_data = json.load(file)
 
-with open(twitter_json_path, "r") as file:
-    twitter_data = json.load(file)
-
-with open(wiki_json_path, "r") as file:
-    wiki_data = json.load(file)
+# extract the individual datasets
+reddit_data = combined_data["reddit"]
+twitter_data = combined_data["twitter"]
+wiki_data = combined_data["wiki"]
 
 # create inverted index for boolean search (temporary solution for prototype)
 def create_index():
@@ -132,9 +128,9 @@ def score_results(results, query):
         
         formatted_doc = {
             "source": doc["source"],
-            "streamer": doc["streamer"],
-            "text": doc["text"],
-            "relevance_score": round(score, 2)
+            "name": doc["streamer"],
+            "doc": doc["text"][:150] + "..." if len(doc["text"]) > 150 else doc["text"],
+            "sim_score": round(score, 2)
         }
         
         if doc["source"] == "reddit":
@@ -156,9 +152,9 @@ search_index = create_index()
 def home():
     return render_template("base.html", title = "Streamer Search")
 
-@app.route("/episodes")
+@app.route("/search")
 def search_streamer():
-    query = request.args.get("title", "")
+    query = request.args.get("name", "")
     if not query:
         return jsonify([])
     
@@ -166,15 +162,8 @@ def search_streamer():
     
     scored_results = score_results(raw_results, query)[:10]
     
-    transformed_results = []
-    for result in scored_results:
-        transformed_results.append({
-            "title": result["streamer"],
-            "descr": result["text"][:150] + "..." if len(result["text"]) > 150 else result["text"],
-            "imdb_rating": result["relevance_score"] 
-        })
-    
-    return jsonify(transformed_results)
+    # Return the results directly since we already formatted them in score_results
+    return jsonify(scored_results)
 
 if __name__ == "__main__":
     app.run(debug = True, host = "0.0.0.0", port = 5000)
