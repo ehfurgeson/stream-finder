@@ -46,7 +46,7 @@ async def main():
         return df['Name'].tolist()
 
 # Usage:
-    streamers= load_streamers_csv('400to600.csv')
+    streamers= load_streamers_csv('top_1000_twitch.csv')
 
 
     # Path to the twitter.json file (guaranteed to exist)
@@ -88,6 +88,7 @@ async def main():
             print(f"Logged in and saved cookies to {COOKIES_FILE}")
         else:
             raise ValueError("No authentication method available. Provide cookies.json or twitter_config.cfg")
+
 
         # Process each streamer in the list
         for streamer in streamers:
