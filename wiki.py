@@ -10,7 +10,7 @@ def read_streamers_from_csv(file_path="top_1000_twitch.csv"):
     """Read streamer names from CSV file."""
     try:
         df = pd.read_csv(file_path)
-        return df["Name"].tolist()
+        return df["Name"].tolist()[500:700]
     except FileNotFoundError:
         print(f"Error: {file_path} not found.")
         return []
