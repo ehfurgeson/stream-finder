@@ -4,8 +4,8 @@ from bs4 import BeautifulSoup
 import time
 
 # Your private API keys
-SERPAPI_KEY = "f8163165484d45e0b213cf9618076a242ec32cd34aaa9b6453b17122f3a130ce"
-NEWSAPI_KEY = "b10505ddafe74d2b80cfa50612d8033d"  # Get from https://newsapi.org/
+SERPAPI_KEY = ""
+NEWSAPI_KEY = ""  # Get from https://newsapi.org/
 
 # Load JSON file
 with open("wikipage.json", "r", encoding="utf-8") as f:
