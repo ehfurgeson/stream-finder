@@ -42,7 +42,8 @@ def create_index():
             for word in words:
                 index[word].append(("twitter", streamer, i))
     for i, entry in enumerate(wiki_data):
-        if entry["wikipedia_summary"] != "Search error, unable to fetch summary.":
+        if (entry["wikipedia_summary"] != "Search error, unable to fetch summary."
+            and entry["wikipedia_summary"] != "Failed to retrieve Wikipedia page."):
             summary = entry["wikipedia_summary"].lower()
             words = re.findall(r"\w+", summary)
             for word in words:
@@ -74,7 +75,7 @@ def search(query, index):
                             "streamer": streamer,
                             "data": reddit_data[streamer][idx],
                             "text": reddit_data[streamer][idx]["Title"],
-                            "score": reddit_data[streamer][idx]["Score"],
+                            "score": 1,  # Default score for reddit posts
                             "idx": idx
                         }
                     elif source == "twitter":
@@ -92,7 +93,7 @@ def search(query, index):
                             "streamer": streamer,
                             "data": wiki_data[idx],
                             "text": wiki_data[idx]["wikipedia_summary"],
-                            "score": 5,  # Default score for wiki entries
+                            "score": 2,  # Default score for wiki entries (double)
                             "idx": idx
                         }
     results = []
@@ -103,39 +104,17 @@ def search(query, index):
     return results
 
 def score_results(results, query):
-    query_terms = set(re.findall(r"\w+", query.lower()))
     scored_results = []
     
     for doc in results:
-        score = 0
-        text = doc["text"].lower()
-        
-        term_match_score = doc.get("term_matches", 0) * 15
-        score += term_match_score
-        
-        for term in query_terms:
-            count = text.count(term.lower())
-            score += count * 5
-        
-        if doc["source"] == "reddit":
-            reddit_score_boost = min(doc["score"] / 500, 20)
-            score += reddit_score_boost
-        elif doc["source"] == "wiki":
-            score += 15
-        
-        if " ".join(query_terms) in text.lower():
-            score += 50
+        score = doc["term_matches"] * doc["score"]
         
         formatted_doc = {
             "source": doc["source"],
             "name": doc["streamer"],
             "doc": doc["text"][:150] + "..." if len(doc["text"]) > 150 else doc["text"],
-            "sim_score": round(score, 2)
+            "sim_score": score 
         }
-        
-        if doc["source"] == "reddit":
-            formatted_doc["reddit_score"] = doc["score"]
-            formatted_doc["id"] = doc["data"]["ID"]
         
         scored_results.append((formatted_doc, score))
     
