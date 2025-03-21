@@ -89,7 +89,7 @@ async def main():
         else:
             raise ValueError("No authentication method available. Provide cookies.json or twitter_config.cfg")
 
-
+        streamers = streamers[600:800]
         # Process each streamer in the list
         for streamer in streamers:
             # Create key by removing spaces (e.g., "Kai Cenat" -> "KaiCenat")
