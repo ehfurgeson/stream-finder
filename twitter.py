@@ -46,7 +46,7 @@ async def main():
         return df['Name'].tolist()
 
 # Usage:
-    streamers= load_streamers_csv('400to600.csv')
+    streamers= load_streamers_csv('top_1000_twitch.csv')
 
 
     # Path to the twitter.json file (guaranteed to exist)
@@ -89,6 +89,7 @@ async def main():
         else:
             raise ValueError("No authentication method available. Provide cookies.json or twitter_config.cfg")
 
+        streamers = streamers[678:800]
         # Process each streamer in the list
         for streamer in streamers:
             # Create key by removing spaces (e.g., "Kai Cenat" -> "KaiCenat")
