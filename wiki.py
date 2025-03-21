@@ -1,119 +1,200 @@
 import time
 import json
 import pandas as pd
-import wikipedia
 import requests
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-from top_scraper import scrape_twitch_streamers  # Import the Twitch scraper
+import wikipediaapi
+from googlesearch import search
+import random
+
+def read_streamers_from_csv(file_path="top_1000_twitch.csv"):
+    """Read streamer names from CSV file."""
+    try:
+        df = pd.read_csv(file_path)
+        return df["Name"].tolist()
+    except FileNotFoundError:
+        print(f"Error: {file_path} not found.")
+        return []
+    except Exception as e:
+        print(f"Error reading CSV: {e}")
+        return []
 
 def format_streamer_name(name):
-    """Format streamer name for better Wikipedia matching."""
+    """Format streamer name for better matching."""
     return name.replace("_", " ").title()
 
-def get_wikipedia_summary_selenium(streamer_name):
-    """Use Selenium to find and scrape Wikipedia summary from Google search."""
+def fetch_wikipedia_content(streamer_name):
+    """Fetch Wikipedia content with a single attempt."""
+    wiki = wikipediaapi.Wikipedia(
+        language='en',
+        extract_format=wikipediaapi.ExtractFormat.WIKI,
+        user_agent='StreamerWikiScraper/1.0 (contact: your-email@example.com)'
+    )
+    
     formatted_name = format_streamer_name(streamer_name)
-    search_query = f"{formatted_name} wikipedia"
     
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
+    page = wiki.page(formatted_name)
+    if page.exists():
+        return {
+            "url": page.fullurl,
+            "content": page.text,
+            "source": "Wikipedia"
+        }
     
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.get("https://www.google.com")
+    page = wiki.page(f"{formatted_name} (streamer)")
+    if page.exists():
+        return {
+            "url": page.fullurl,
+            "content": page.text,
+            "source": "Wikipedia"
+        }
     
-    search_box = driver.find_element(By.NAME, "q")
-    search_box.send_keys(search_query)
-    search_box.send_keys(Keys.RETURN)
-    time.sleep(2)
+    return None
+
+def fetch_google_search_content(streamer_name, retries=3, backoff_factor=2):
+    """Fetch content from the first Google Search result with retries and exponential backoff."""
+    query = f"{streamer_name} twitch wikipedia"
+    url = None
+    for attempt in range(retries):
+        try:
+            # Use googlesearch to find the first result
+            for url in search(query, num_results=1):
+                print(f"Scraping content from: {url}")
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124'}
+                response = requests.get(url, headers=headers, timeout=10)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.content, 'html.parser')
+                content = soup.get_text(separator='\n', strip=True)
+                return {
+                    "url": url,
+                    "content": content[:5000],  # Limit content size for practicality
+                    "source": "Google Search"
+                }
+            return {
+                "url": None,
+                "content": "No relevant content found.",
+                "source": "Google Search"
+            }
+        except requests.HTTPError as e:
+            if e.response.status_code == 429:
+                # Exponential backoff
+                wait_time = backoff_factor ** attempt
+                print(f"429 Too Many Requests. Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            else:
+                print(f"HTTP error fetching content for {streamer_name}: {e}")
+                return {
+                    "url": url if url else None,
+                    "content": f"Error: {str(e)}",
+                    "source": "Google Search"
+                }
+        except Exception as e:
+            print(f"Error fetching content for {streamer_name}: {e}")
+            return {
+                "url": url if url else None,
+                "content": f"Error: {str(e)}",
+                "source": "Google Search"
+            }
     
-    # Find first Wikipedia link
-    links = driver.find_elements(By.CSS_SELECTOR, "a")
-    wiki_url = None
-    for link in links:
-        href = link.get_attribute("href")
-        if href and "wikipedia.org/wiki/" in href:
-            wiki_url = href
-            break
-    
-    driver.quit()
-    
-    if not wiki_url:
-        return "Wikipedia page not found."
-    
-    # Scrape Wikipedia summary
+    # If all retries fail, return an error message
+    return {
+        "url": None,
+        "content": "Error: Too many retries. Falling back to news search.",
+        "source": "Google Search"
+    }
+
+def fetch_news_info(streamer_name):
+    """Fetch news content about the streamer from a web search."""
+    query = f"{streamer_name} streamer news site:*.com | site:*.org | site:*.edu -inurl:(signup login wikipedia)"
+    url = None
     try:
-        response = requests.get(wiki_url)
-        soup = BeautifulSoup(response.text, "html.parser")
-        paragraphs = soup.select("p")
-        for para in paragraphs:
-            text = para.get_text().strip()
-            if text:
-                return text[:500]  # Limit to first 500 characters
+        # Use googlesearch to find a news-like article
+        for url in search(query, num_results=1):
+            print(f"Scraping news article: {url}")
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124'}
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+            content = soup.get_text(separator='\n', strip=True)
+            return {
+                "url": url,
+                "content": content[:5000],  # Limit content size for practicality
+                "source": "News Article"
+            }
+        return {
+            "url": None,
+            "content": "No news articles found.",
+            "source": "News Article"
+        }
+    except requests.HTTPError as e:
+        print(f"HTTP error fetching news for {streamer_name}: {e}")
+        return {
+            "url": url if url else None,
+            "content": f"Error: {str(e)}",
+            "source": "News Article"
+        }
     except Exception as e:
-        print(f"Error fetching Wikipedia page for {formatted_name}: {e}")
-        return "Error retrieving Wikipedia page."
+        print(f"Error fetching news for {streamer_name}: {e}")
+        return {
+            "url": url if url else None,
+            "content": f"Error: {str(e)}",
+            "source": "News Article"
+        }
+
+def update_json_file(data, filename="wikipage.json"):
+    """Update the JSON file with current data."""
+    try:
+        with open(filename, "w", encoding="utf-8") as json_file:
+            json.dump(data, json_file, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Error updating {filename}: {e}")
 
 def compile_streamer_wikipedia():
-    """Scrape Wikipedia summaries for the top Twitch streamers using Selenium."""
-    print("Fetching top Twitch streamers from TwitchTracker...")
-    streamers_df = scrape_twitch_streamers(num_pages=20)
-    
-    data = []
-    for _, row in streamers_df.iterrows():
-        streamer = row["Name"]
-        formatted_streamer = format_streamer_name(streamer)
-        
-        print(f"Fetching Wikipedia summary for {formatted_streamer}...")
-        summary = get_wikipedia_summary_selenium(formatted_streamer)
+    """Compile streamer data, updating JSON file progressively."""
+    streamers = read_streamers_from_csv()
+    if not streamers:
+        print("No streamers found to process.")
+        return
 
+    data = []
+    update_json_file(data)
+    print("Initialized wikipage.json")
+
+    for i, streamer in enumerate(streamers, 1):
+        print(f"Processing {streamer} ({i}/{len(streamers)})...")
+        
+        result = fetch_wikipedia_content(streamer)
+        
+        if result is None:
+            print(f"No Wikipedia page found for {streamer}, falling back to Google Search...")
+            result = fetch_google_search_content(streamer)
+            
+            # If Google Search fails (e.g., due to 429 errors), fall back to news search
+            if result["content"].startswith("Error:"):
+                print(f"Google Search failed for {streamer}, falling back to news search...")
+                result = fetch_news_info(streamer)
+        
         data.append({
             "streamer": streamer,
-            "formatted_name": formatted_streamer,
-            "wikipedia_summary": summary
+            "url": result["url"],
+            "content": result["content"],
+            "source": result["source"]
         })
-    
-    # Save data to a JSON file
-    with open("top_streamers_wikipedia.json", "w", encoding="utf-8") as json_file:
-        json.dump(data, json_file, ensure_ascii=False, indent=4)
-    
-    print("Dataset saved as top_streamers_wikipedia.json")
+        
+        update_json_file(data)
+        print(f"Updated wikipage.json with {streamer}")
+        
+        # Random delay between 5 to 15 seconds to avoid being flagged as a bot
+        delay = random.randint(5, 15)
+        print(f"Waiting for {delay} seconds before the next request...")
+        time.sleep(delay)
 
-def generate_word_cloud():
-    """Generates a word cloud from the Wikipedia summaries."""
-    try:
-        with open("top_streamers_wikipedia.json", "r", encoding="utf-8") as json_file:
-            data = json.load(json_file)
-        
-        text = " ".join([entry["wikipedia_summary"] for entry in data if "Wikipedia page not found" not in entry["wikipedia_summary"]])
-        
-        from wordcloud import WordCloud
-        import matplotlib.pyplot as plt
-        import re
+    print("Dataset fully processed and saved as wikipage.json")
 
-        text = re.sub(r'http\S+|www\S+', '', text)  # Remove URLs
-        text = re.sub(r'[^A-Za-z0-9 ]+', '', text)  # Remove special characters
-        
-        wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text)
-        
-        plt.figure(figsize=(10, 5))
-        plt.imshow(wordcloud, interpolation='bilinear')
-        plt.axis("off")
-        plt.title("Word Cloud for Top Streamers Wikipedia Summaries")
-        plt.show()
-    
-    except FileNotFoundError:
-        print("Error: JSON file not found. Run compile_streamer_wikipedia() first.")
-
-# Run the script
 if __name__ == "__main__":
-    compile_streamer_wikipedia()  # Scrape Wikipedia summaries
-    generate_word_cloud()  # Generate word cloud from summaries
+    try:
+        compile_streamer_wikipedia()
+    except KeyboardInterrupt:
+        print("\nScript interrupted by user.")
+    except Exception as e:
+        print(f"Unexpected error: {e}")

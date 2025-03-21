@@ -12,42 +12,6 @@
     flex-direction: column;
 }
 
-#google-c{
-    color:#4285F4;
-}
-
-#google-s{
-    color:#DB4437;
-}
-
-#google-4{
-    color:	#F4B400;
-}
-
-#google-3{
-    color:	#4285F4;
-}
-
-#google-0-1{
-    color:	#0F9D58;
-}
-
-#google-0-2{
-    color:#DB4437;
-}
-
-.google-colors{
-    display: flex;
-    align-items: center;
-    font-size: 48px;
-    font-family: 'Open Sans', sans-serif;
-}
-
-.google-colors h1{
-    margin-bottom: 0;
-    margin-right: 3px;
-}
-
 .input-box{
     border-radius: 50px;
     border:1px solid black;
@@ -82,10 +46,10 @@
     margin-top:50px; 
 }
 
-.episode-title{
+.name{
     font-family: 'Kanit', sans-serif;
 }
 
-.episode-desc{
+.doc{
     font-family: 'Montserrat', sans-serif;
 }
