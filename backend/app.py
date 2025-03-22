@@ -42,7 +42,8 @@ def create_index():
             for word in words:
                 index[word].append(("twitter", streamer, i))
     for i, entry in enumerate(wiki_data):
-        if entry["wikipedia_summary"] != "Search error, unable to fetch summary.":
+        if (entry["wikipedia_summary"] != "Search error, unable to fetch summary."
+            and entry["wikipedia_summary"] != "Failed to retrieve Wikipedia page."):
             summary = entry["wikipedia_summary"].lower()
             words = re.findall(r"\w+", summary)
             for word in words:
@@ -92,7 +93,7 @@ def search(query, index):
                             "streamer": streamer,
                             "data": wiki_data[idx],
                             "text": wiki_data[idx]["wikipedia_summary"],
-                            "score": 5,  # Default score for wiki entries
+                            "score": 2,  # Default score for wiki entries
                             "idx": idx
                         }
     results = []
