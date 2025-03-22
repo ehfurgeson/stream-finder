@@ -62,9 +62,23 @@ def main():
     # Read the CSV file that contains the top 1000 streamers
     df = pd.read_csv("top_1000_twitch.csv")
     
+    # Load the existing JSON file to see which streamers have already been processed
+    try:
+        with open("reddit.json", 'r') as f:
+            data = json.load(f)
+            processed_streamers = set(data.keys())
+    except (FileNotFoundError, json.JSONDecodeError):
+        processed_streamers = set()
+
     # Iterate over each streamer in the CSV (assuming column 'Name' contains streamer names)
     for idx, row in df.iterrows():
         streamer = row["Name"].strip()
+        
+        # Skip streamers that have already been processed
+        if streamer in processed_streamers:
+            print(f"Skipping {streamer} (already processed)")
+            continue
+        
         print(f"\nProcessing streamer: {streamer}")
         
         posts = scrape_reddit_for_streamer(streamer)
@@ -74,6 +88,7 @@ def main():
         
         # Optional: pause between requests to be polite to Reddit's servers.
         time.sleep(2)
+
 
 if __name__ == "__main__":
     main()
