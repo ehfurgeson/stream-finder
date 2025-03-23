@@ -45,9 +45,8 @@ async def main():
         # Assumes the CSV has headers 'Rank' and 'Name'
         return df['Name'].tolist()
 
-# Usage:
-    streamers= load_streamers_csv('top_1000_twitch.csv')
-
+    # Usage:
+    streamers = load_streamers_csv('top_1000_twitch.csv')
 
     # Path to the twitter.json file (guaranteed to exist)
     JSON_FILE = 'twitter.json'
@@ -98,9 +97,9 @@ async def main():
                 print(f"{datetime.now()} - Tweets for '{streamer_key}' already exist in {JSON_FILE}. Skipping...")
                 continue
             
-            # Construct query using the streamer's key and the language filter.
-            # For example: "KaiCenat lang:en"
-            query = f"{streamer_key} lang:en"
+            # Construct query using the streamer's name and the language filter, and include 'twitch' in the search.
+            # For example: "Kai Cenat twitch lang:en"
+            query = f"{streamer} twitch"
             
             tweet_count = 0
             tweets = None
