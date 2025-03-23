@@ -8,25 +8,25 @@ from collections import defaultdict
 import re
 
 # ROOT_PATH for linking with all your files. 
+# Feel free to use a config.py or settings.py with a global export variable
 os.environ["ROOT_PATH"] = os.path.abspath(os.path.join("..", os.curdir))
 
 # Get the directory of the current script
 current_directory = os.path.dirname(os.path.abspath(__file__))
 
-# specify the path to the json file relative to the current script
+# Specify the path to the json file relative to the current script
 json_path = os.path.join(current_directory, "init.json")
 
-# load the json data
+# Load the json data
 with open(json_path, "r") as file:
     combined_data = json.load(file)
 
-# extract the individual datasets
+# Extract the individual datasets
 reddit_data = combined_data["reddit"]
 twitter_data = combined_data["twitter"]
 wiki_data = combined_data["wiki"]
-random_data = combined_data["random"]  # NEW
 
-# create inverted index for boolean search (temporary solution for prototype)
+# Create inverted index for boolean search (temporary solution for prototype)
 def create_index():
     index = defaultdict(list)
     for streamer, data in reddit_data.items():
@@ -48,15 +48,9 @@ def create_index():
             words = re.findall(r"\w+", summary)
             for word in words:
                 index[word].append(("wiki", entry["streamer"], i))
-    for i, entry in enumerate(random_data):  # NEW
-        if "text" in entry:
-            text = entry["text"].lower()
-            words = re.findall(r"\w+", text)
-            for word in words:
-                index[word].append(("random", entry["streamer"], i))
     return index
 
-# simple search function for prototype
+# Simple search function for prototype
 def search(query, index):
     query = query.strip().lower()
     terms = re.findall(r"\w+", query)
@@ -99,16 +93,7 @@ def search(query, index):
                             "streamer": streamer,
                             "data": wiki_data[idx],
                             "text": wiki_data[idx]["wikipedia_summary"],
-                            "score": 2,
-                            "idx": idx
-                        }
-                    elif source == "random":  # NEW
-                        doc_info[doc_id] = {
-                            "source": "random",
-                            "streamer": streamer,
-                            "data": random_data[idx],
-                            "text": random_data[idx]["text"],
-                            "score": 1,  # Temporary placeholder, can adjust in scoring
+                            "score": 2,  # Default score for wiki entries
                             "idx": idx
                         }
     results = []
@@ -141,11 +126,8 @@ def score_results(results, query):
             score += reddit_score_boost
         elif doc["source"] == "wiki":
             score += 15
-        elif doc["source"] == "random":
-            score += 5  # Small boost for random data
         
-        # Exact phrase match bonus
-        if " ".join(query_terms) in text:
+        if " ".join(query_terms) in text.lower():
             score += 50
         
         # Format result
@@ -166,7 +148,6 @@ def score_results(results, query):
     
     return [doc for doc, _ in scored_results]
 
-
 app = Flask(__name__)
 CORS(app)
 
@@ -183,11 +164,8 @@ def search_streamer():
         return jsonify([])
     
     raw_results = search(query, search_index)
-    
     scored_results = score_results(raw_results, query)[:10]
-    
-    # Return the results directly since we already formatted them in score_results
     return jsonify(scored_results)
 
 if __name__ == "__main__":
-    app.run(debug = True, host = "0.0.0.0", port = 5000)
+    app.run(debug=True, host="0.0.0.0", port=5000)
