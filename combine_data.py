@@ -9,7 +9,6 @@ def combine_data():
     reddit_json_path = os.path.join(root_directory, "reddit.json")
     twitter_json_path = os.path.join(root_directory, "twitter.json")
     wiki_json_path = os.path.join(root_directory, "wiki.json")
-    random_json_path = os.path.join(root_directory, "random.json")  # New file
     
     # Specify path to output file in the backend folder
     backend_directory = os.path.join(root_directory, "backend")
@@ -42,5 +41,5 @@ def combine_data():
     
     print(f"Successfully combined data into {init_json_path}")
 
-if __name__ == "__main__":
+if __name__ == "_main_":
     combine_data()
