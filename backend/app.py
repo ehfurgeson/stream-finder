@@ -8,7 +8,6 @@ from collections import defaultdict
 import re
 
 # ROOT_PATH for linking with all your files. 
-# Feel free to use a config.py or settings.py with a global export variable
 os.environ["ROOT_PATH"] = os.path.abspath(os.path.join("..", os.curdir))
 
 # Get the directory of the current script
@@ -25,6 +24,7 @@ with open(json_path, "r") as file:
 reddit_data = combined_data["reddit"]
 twitter_data = combined_data["twitter"]
 wiki_data = combined_data["wiki"]
+random_data = combined_data["random"]  # NEW
 
 # create inverted index for boolean search (temporary solution for prototype)
 def create_index():
@@ -48,6 +48,12 @@ def create_index():
             words = re.findall(r"\w+", summary)
             for word in words:
                 index[word].append(("wiki", entry["streamer"], i))
+    for i, entry in enumerate(random_data):  # NEW
+        if "text" in entry:
+            text = entry["text"].lower()
+            words = re.findall(r"\w+", text)
+            for word in words:
+                index[word].append(("random", entry["streamer"], i))
     return index
 
 # simple search function for prototype
@@ -84,7 +90,7 @@ def search(query, index):
                             "streamer": streamer,
                             "data": twitter_data[streamer][idx],
                             "text": twitter_data[streamer][idx],
-                            "score": 1,  # Default score for tweets
+                            "score": 1,
                             "idx": idx
                         }
                     elif source == "wiki":
@@ -93,7 +99,16 @@ def search(query, index):
                             "streamer": streamer,
                             "data": wiki_data[idx],
                             "text": wiki_data[idx]["wikipedia_summary"],
-                            "score": 2,  # Default score for wiki entries
+                            "score": 2,
+                            "idx": idx
+                        }
+                    elif source == "random":  # NEW
+                        doc_info[doc_id] = {
+                            "source": "random",
+                            "streamer": streamer,
+                            "data": random_data[idx],
+                            "text": random_data[idx]["text"],
+                            "score": 1,  # Temporary placeholder, can adjust in scoring
                             "idx": idx
                         }
     results = []
@@ -111,22 +126,29 @@ def score_results(results, query):
         score = 0
         text = doc["text"].lower()
         
+        # Binary term match score
         term_match_score = doc.get("term_matches", 0) * 15
         score += term_match_score
         
+        # Term frequency score
         for term in query_terms:
             count = text.count(term.lower())
             score += count * 5
         
+        # Source-based scoring
         if doc["source"] == "reddit":
             reddit_score_boost = min(doc["score"] / 500, 20)
             score += reddit_score_boost
         elif doc["source"] == "wiki":
             score += 15
+        elif doc["source"] == "random":
+            score += 5  # Small boost for random data
         
-        if " ".join(query_terms) in text.lower():
+        # Exact phrase match bonus
+        if " ".join(query_terms) in text:
             score += 50
         
+        # Format result
         formatted_doc = {
             "source": doc["source"],
             "name": doc["streamer"],
@@ -140,9 +162,10 @@ def score_results(results, query):
         
         scored_results.append((formatted_doc, score))
     
-    scored_results.sort(key = lambda x: x[1], reverse = True)
+    scored_results.sort(key=lambda x: x[1], reverse=True)
     
     return [doc for doc, _ in scored_results]
+
 
 app = Flask(__name__)
 CORS(app)
