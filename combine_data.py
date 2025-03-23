@@ -6,9 +6,9 @@ def combine_data():
     root_directory = os.path.dirname(os.path.abspath(__file__))
     
     # Specify paths to input files in the root directory
-    reddit_json_path = os.path.join(root_directory, "filtered_reddit.json")
-    twitter_json_path = os.path.join(root_directory, "filtered_twitter.json")
-    wiki_json_path = os.path.join(root_directory, "filtered_wikipage2.json")
+    reddit_json_path = os.path.join(root_directory, "reddit.json")
+    twitter_json_path = os.path.join(root_directory, "twitter.json")
+    wiki_json_path = os.path.join(root_directory, "wikipage2.json")
     random_json_path = os.path.join(root_directory, "filtered_twitchpage.json")
     
     # Specify path to output file in the backend folder
