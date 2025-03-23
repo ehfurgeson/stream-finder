@@ -4,12 +4,9 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import random
-import string
 import re
-import os
 import logging
 from datetime import datetime
-import math
 
 # Optional imports for fallback methods
 try:
@@ -24,9 +21,6 @@ try:
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.common.exceptions import TimeoutException, NoSuchElementException
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
@@ -36,10 +30,7 @@ except ImportError:
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler("twitch_scraper.log"),
-        logging.StreamHandler()
-    ]
+    handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 
@@ -70,8 +61,7 @@ def random_user_agent():
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:93.0) Gecko/20100101 Firefox/93.0"
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36"
     ]
     return random.choice(user_agents)
 
@@ -104,31 +94,48 @@ def fetch_page_content(url, timeout=15):
         return f"Error: {str(e)}"
 
 def fetch_twitch_page_direct(streamer_name):
-    """Try to access a Twitch page directly with improved verification."""
-    possible_usernames = [
-        normalize_streamer_name(streamer_name),
-        normalize_streamer_name(streamer_name.replace(" ", "")),
-        normalize_streamer_name(streamer_name.replace(" ", "_")),
-        normalize_streamer_name(streamer_name.replace(" ", "-"))
-    ]
+    """Try to access a Twitch page directly without using search."""
+    # Try different possible username formats
+    possible_usernames = []
+    
+    # Format 1: Direct lowercase without spaces
+    possible_usernames.append(streamer_name.lower().replace(" ", ""))
+    
+    # Format 2: Lowercase with underscores
+    possible_usernames.append(streamer_name.lower().replace(" ", "_"))
+    
+    # Format 3: Direct lowercase (if already no spaces)
+    if " " not in streamer_name:
+        possible_usernames.append(streamer_name.lower())
+    
+    # Try up to 3 variants of the name
+    name_parts = streamer_name.lower().split()
+    if len(name_parts) > 1:
+        # Format 4: First part only
+        possible_usernames.append(name_parts[0])
+        # Format 5: First two parts no space
+        if len(name_parts) > 1:
+            possible_usernames.append("".join(name_parts[:2]))
+    
+    # Remove duplicates
+    possible_usernames = list(set(possible_usernames))
+    
+    logger.info(f"Trying direct Twitch URLs for {streamer_name}: {possible_usernames}")
     
     for username in possible_usernames:
         url = f"https://www.twitch.tv/{username}"
-        logger.info(f"Trying direct URL: {url}")
+        
+        # Add delay with jitter
+        delay = generate_jitter(2, 0.5)
+        logger.info(f"Waiting {delay:.2f} seconds before accessing {url}")
+        time.sleep(delay)
         
         try:
             headers = {'User-Agent': random_user_agent()}
             response = requests.get(url, headers=headers, timeout=15)
             
-            # More detailed logging
-            logger.info(f"Response status: {response.status_code} for {url}")
-            
             # If page exists (no 404)
             if response.status_code == 200:
-                # Save the HTML for debugging
-                with open(f"debug_{username}_response.html", "w", encoding="utf-8") as f:
-                    f.write(response.text[:10000])
-                
                 # Check for indicators of a non-existent channel
                 non_existent_phrases = [
                     "Sorry. Unless you've got a time machine, that content is unavailable.",
@@ -151,6 +158,9 @@ def fetch_twitch_page_direct(streamer_name):
                 logger.info(f"No Twitch page found at {url} (Status: {response.status_code})")
         except Exception as e:
             logger.warning(f"Error accessing {url}: {e}")
+    
+    logger.info(f"No direct Twitch page found for {streamer_name}")
+    return None
 
 def fetch_twitch_page_google(streamer_name, attempt=0):
     """
@@ -251,21 +261,21 @@ def fetch_twitch_page_selenium(streamer_name):
         time.sleep(5)
         
         # Check if it's a valid channel page
-        try:
-            # Look for elements that would typically be on a channel page
-            channel_elements = driver.find_elements(By.CSS_SELECTOR, ".channel-info-content")
-            
-            if channel_elements or "About" in driver.page_source:
-                logger.info(f"Found valid Twitch page via Selenium for {streamer_name}")
-                return {
-                    "url": url,
-                    "content": driver.page_source[:8000],  # Limit content length
-                    "source": "Twitch Channel (Selenium)",
-                    "validated": True,
-                    "username": username
-                }
-        except Exception as e:
-            logger.warning(f"Error validating Twitch page with Selenium: {e}")
+        page_source = driver.page_source
+        non_existent_phrases = [
+            "Sorry. Unless you've got a time machine, that content is unavailable.",
+            "The page you were looking for doesn't exist yet"
+        ]
+        
+        if not any(phrase in page_source for phrase in non_existent_phrases):
+            logger.info(f"Found valid Twitch page via Selenium for {streamer_name}")
+            return {
+                "url": url,
+                "content": page_source[:8000],  # Limit content length
+                "source": "Twitch Channel (Selenium)",
+                "validated": True,
+                "username": username
+            }
         
         logger.info(f"No valid Twitch page found via Selenium for {streamer_name}")
         return None
@@ -383,12 +393,6 @@ def scrape_twitch_pages():
         logger.info(f"Progress: {i}/{total_streamers} ({i/total_streamers:.1%}) - Success rate: {success_rate:.1f}%")
         logger.info(f"Elapsed time: {elapsed_time/60:.1f} minutes - Est. remaining: {est_time_remaining/60:.1f} minutes")
         
-        # Save backup every 10 streamers
-        if i % 10 == 0:
-            backup_file = f"{OUTPUT_FILE}.backup"
-            update_json_file(twitch_data, backup_file)
-            logger.info(f"Created backup at {backup_file}")
-        
         # Wait before next streamer to avoid rate limiting
         if i < total_streamers:
             delay = generate_jitter(5, 0.5)
@@ -412,7 +416,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.warning("\nScript interrupted by user.")
     except Exception as e:
-        logger.error(f"Unexpected error: {e}", exc_info=True)
+        logger.error(f"Unexpected error: {e}")
     finally:
         logger.info(f"Script finished at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info("-" * 50)
