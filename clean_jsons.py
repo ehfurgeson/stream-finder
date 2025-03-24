@@ -96,10 +96,10 @@ if __name__ == "__main__":
     print("\nProcessing wikipage2.json...")
     clean_and_check_json('wikipage2.json', 'top_1000_twitch.csv')
 
-    print("\nProcessing wikipage2.json...")
+    print("\nProcessing twitter.json...")
     clean_and_check_json('twitter.json', 'top_1000_twitch.csv')
 
-    print("\nProcessing wikipage2.json...")
+    print("\nProcessing random.json...")
     clean_and_check_json('random.json', 'top_1000_twitch.csv')
 
 
