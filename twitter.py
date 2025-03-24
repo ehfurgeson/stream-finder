@@ -32,7 +32,7 @@ async def get_tweets(client, query, tweets=None):
         print(f'{datetime.now()} - Getting tweets for query: {query}')
         tweets = await client.search_tweet(query, product='Top')
     else:
-        wait_time = randint(2, 5)
+        wait_time = randint(5, 7)
         print(f'{datetime.now()} - Getting next tweets after {wait_time} seconds...')
         await asyncio.sleep(wait_time)
         tweets = await tweets.next()
