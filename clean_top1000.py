@@ -7,7 +7,8 @@ remove_keywords = {
     'effect', 'ray', 'deme', 'soap', 'dinah', 'morgana', 'rain', 'curry',
     'sinder', 'leopard', 'ship', 'meat', 'fortnite', 'warcraft', 'chap', 'scream', 'faith','foolish',
     'patty', 'apex', 'guru', 'stunt', 'name', 'scrap', 'scrapie', 'aspen',
-    'knight', 'apathy', 'quantum', 'dizzy', 'formal', 'gale', 'prod', 'bonnie', 'vei', 'twitch'
+    'knight', 'apathy', 'quantum', 'dizzy', 'formal', 'gale', 'prod', 'bonnie', 'vei', 'twitch', 
+    'valorant_northamerica'
     }
 
 # Read the CSV file
