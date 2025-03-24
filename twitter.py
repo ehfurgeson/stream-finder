@@ -99,7 +99,7 @@ async def main():
             
             # Construct query using the streamer's name and the language filter, and include 'twitch' in the search.
             # For example: "Kai Cenat twitch lang:en"
-            query = f"{streamer} twitch"
+            query = f"({streamer} AND {streamer} twitch)"
             
             tweet_count = 0
             tweets = None
