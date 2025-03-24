@@ -7,45 +7,156 @@
 <body>
     <div class="full-body-container">
         <div class="top-text">
-            <img style = "width: 20vw;" src="{{ url_for('static', filename='images/logo.png') }}" />
+            <img style="width: 20vw;" src="{{ url_for('static', filename='images/logo.png') }}" />
             <div class="input-box" onclick="sendFocus()">
                 <img src="{{ url_for('static', filename='images/mag.png') }}" />
                 <input placeholder="Search for a Twitch streamer" id="filter-text-val" onkeyup="filterText()">
             </div>
         </div>
         <div id="answer-box">
-
+            <!-- Search results will populate here -->
         </div>
     </div>
 
     <script>
+        function streamerCardTemplate(streamerData) {
+            // Create the Twitch profile section if available
+            let twitchSection = "";
+            if (streamerData.twitch_info) {
+                twitchSection = `
+                    <div class="twitch-profile">
+                        <h3>${streamerData.name}</h3>
+                        <a href="${streamerData.twitch_info.url}" target="_blank" class="twitch-link">
+                            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Twitch" class="twitch-icon" />
+                            Visit ${streamerData.twitch_info.username}'s Twitch Channel
+                        </a>
+                    </div>
+                `;
+            }
 
-        function answerBoxTemplate(name, doc, simScore, source){
-            return `<div class=''>
-                <h3 class='name'>${name}</h3>
-                <p class='doc'>${doc}</p>
-                <p class='sim'>sim score: ${simScore}</p>
-                <p class='source'>source: ${source}</p>
-            </div>`
+            // Create documents section
+            let documentsHtml = "";
+            if (streamerData.documents && streamerData.documents.length > 0) {
+                documentsHtml = `
+                    <div class="document-list">
+                        <h4>Related Content</h4>
+                        ${streamerData.documents.map(doc => documentTemplate(doc)).join('')}
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="streamer-card">
+                    ${twitchSection}
+                    ${documentsHtml}
+                </div>
+            `;
         }
 
-        function sendFocus(){
+        function documentTemplate(doc) {
+            return `
+                <div class="document-item">
+                    <p class="doc">${doc.doc}</p>
+                    <div class="meta-info">
+                        <span class="source">Source: ${doc.source}</span>
+                        <span class="sim-score">Score: ${doc.sim_score}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function sendFocus() {
             document.getElementById('filter-text-val').focus()
         }
 
-        function filterText(){
+        function filterText() {
             document.getElementById("answer-box").innerHTML = ""
-            console.log(document.getElementById("filter-text-val").value)
-            fetch("/search?" + new URLSearchParams({ name: document.getElementById("filter-text-val").value }).toString())
-            .then((response) => response.json())
-            .then((data) => data.forEach(row => {
-                
-                let tempDiv = document.createElement("div")
-                tempDiv.innerHTML = answerBoxTemplate(row.name, row.doc, row.sim_score, row.source)
-                document.getElementById("answer-box").appendChild(tempDiv)
-            }));
-
-        }
+            const searchTerm = document.getElementById("filter-text-val").value;
             
+            if (searchTerm.trim() === "") return;
+
+            fetch("/search?" + new URLSearchParams({ name: searchTerm }).toString())
+                .then((response) => response.json())
+                .then((data) => {
+                    if (data.length === 0) {
+                        document.getElementById("answer-box").innerHTML = "<div class='no-results'>No results found</div>";
+                        return;
+                    }
+
+                    data.forEach(streamerData => {
+                        let tempDiv = document.createElement("div");
+                        tempDiv.innerHTML = streamerCardTemplate(streamerData);
+                        document.getElementById("answer-box").appendChild(tempDiv);
+                    });
+                })
+                .catch(error => {
+                    console.error("Error fetching search results:", error);
+                    document.getElementById("answer-box").innerHTML = "<div class='error'>An error occurred while searching</div>";
+                });
+        }
     </script>
+
+    <style>
+        /* Add some basic styles for the new components */
+        .streamer-card {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+
+        .twitch-profile {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .twitch-link {
+            display: inline-flex;
+            align-items: center;
+            color: #6441a5;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .twitch-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 8px;
+        }
+
+        .document-list {
+            margin-top: 10px;
+        }
+
+        .document-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 4px;
+            border-left: 3px solid #ddd;
+        }
+
+        .document-item .doc {
+            margin-bottom: 5px;
+        }
+
+        .meta-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85em;
+            color: #666;
+        }
+
+        .no-results, .error {
+            padding: 20px;
+            text-align: center;
+            color: #666;
+        }
+
+        .error {
+            color: #cc0000;
+        }
+    </style>
 </body>
