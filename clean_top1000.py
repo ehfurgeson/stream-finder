@@ -4,10 +4,11 @@ import pandas as pd
 remove_keywords = {
     'august', 'annoying', 'warn', 'method', 'maximum', 'slacked',
     'celerity', 'mingo', 'tray', 'apply', 'bean', 'mukluk', 'mande',
-    'effect', 'ray', 'deme', 'soap', 'dinah', 'morgana',
-    'sinder', 'leopard', 'ship', 'meat', 'fortnite', 'warcraft', 'chap',
-    'patty', 'apex', 'guru', 'stunt', 'name', 'scrap', 'scrapie'
-}
+    'effect', 'ray', 'deme', 'soap', 'dinah', 'morgana', 'rain', 'curry',
+    'sinder', 'leopard', 'ship', 'meat', 'fortnite', 'warcraft', 'chap', 'scream', 'faith','foolish',
+    'patty', 'apex', 'guru', 'stunt', 'name', 'scrap', 'scrapie', 'aspen',
+    'knight', 'apathy', 'quantum', 'dizzy', 'formal', 'gale', 'prod', 'bonnie', 'vei', 'twitch'
+    }
 
 # Read the CSV file
 df = pd.read_csv('top_1000_twitch.csv')
