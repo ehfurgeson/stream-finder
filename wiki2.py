@@ -3,7 +3,6 @@ import json
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-import wikipediaapi
 from googlesearch import search
 import random
 
@@ -22,41 +21,6 @@ def read_streamers_from_csv(file_path="top_1000_twitch.csv"):
 def format_streamer_name(name):
     """Format streamer name for better matching."""
     return name.replace("_", " ").title()
-
-def fetch_wikipedia_content(streamer_name):
-    """Attempt to fetch Wikipedia content for the streamer using wikipediaapi."""
-    wiki = wikipediaapi.Wikipedia(
-        language='en',
-        extract_format=wikipediaapi.ExtractFormat.WIKI,
-        user_agent='StreamerWikiScraper/1.0 (contact: your-email@example.com)'
-    )
-    formatted_name = format_streamer_name(streamer_name)
-    page = wiki.page(formatted_name)
-    if page.exists():
-        return {
-            "url": page.fullurl,
-            "content": page.text,
-            "source": "Wikipedia"
-        }
-    # Try alternative title: append " (streamer)"
-    page = wiki.page(f"{formatted_name} (streamer)")
-    if page.exists():
-        return {
-            "url": page.fullurl,
-            "content": page.text,
-            "source": "Wikipedia"
-        }
-    return None
-
-def extract_title_from_wiki_url(url):
-    """Extract the page title from a Wikipedia URL."""
-    try:
-        # Example URL: "https://en.wikipedia.org/wiki/Kai_Cenat"
-        title = url.split("/wiki/")[-1]
-        return title.replace("_", " ")
-    except Exception as e:
-        print(f"Error extracting title from URL {url}: {e}")
-        return ""
 
 def random_user_agent():
     """Return a random user agent string from a sample list."""
@@ -82,10 +46,9 @@ def fetch_page_content(url, timeout=10):
 
 def fetch_google_scrapable_content(streamer_name, max_results=5):
     """
-    Search Google using the query "[streamer name] Wikipedia" and check results in order.
-    Return the first scrapable page (including Wikipedia links) found.
+    Search Google using the query "[streamer name] twitch wikipedia" and return the first scrapable page.
     """
-    query = f"{streamer_name} Wikipedia"
+    query = f"{streamer_name} twitch wikipedia"
     delay_before = random.randint(2, 5)
     print(f"Waiting {delay_before} seconds before performing Google search for {streamer_name}...")
     time.sleep(delay_before)
@@ -135,86 +98,64 @@ def compile_streamer_wikipedia():
     random_data = load_json_file("random.json")
     
     for i, streamer in enumerate(streamers, 1):
+        # If the streamer already exists and has a non-empty summary, skip processing.
+        if streamer in wiki_data and wiki_data[streamer].get("wikipedia_summary", "").strip():
+            print(f"Skipping {streamer} as it already has data.")
+            continue
+
         print(f"Processing {streamer} ({i}/{len(streamers)})...")
         formatted = format_streamer_name(streamer)
         
-        # First attempt: Direct Wikipedia lookup.
-        result = fetch_wikipedia_content(streamer)
-        if result:
-            wiki_entry = {
-                "streamer": streamer,
-                "formatted_name": formatted,
-                "wikipedia_summary": result["content"],
-                "link": result["url"]
-            }
-            random_entry = {
-                "streamer": streamer,
-                "formatted_name": formatted,
-                "content": "",
-                "link": ""
-            }
-        else:
-            print(f"No Wikipedia page found for {streamer}, falling back to Google Search...")
-            result = fetch_google_scrapable_content(streamer)
-            if result["url"]:
-                if "wikipedia.org" in result["url"]:
-                    # Extract title from URL and re-query using wikipediaapi.
-                    extracted_title = extract_title_from_wiki_url(result["url"])
-                    print(f"Extracted title from URL: {extracted_title}")
-                    wiki_result = fetch_wikipedia_content(extracted_title)
-                    if wiki_result:
-                        wiki_entry = {
-                            "streamer": streamer,
-                            "formatted_name": formatted,
-                            "wikipedia_summary": wiki_result["content"],
-                            "link": wiki_result["url"]
-                        }
-                        random_entry = {
-                            "streamer": streamer,
-                            "formatted_name": formatted,
-                            "content": "",
-                            "link": ""
-                        }
-                    else:
-                        # If re-query fails, still store the scraped content in wiki_data.
-                        wiki_entry = {
-                            "streamer": streamer,
-                            "formatted_name": formatted,
-                            "wikipedia_summary": result["content"],
-                            "link": result["url"]
-                        }
-                        random_entry = {
-                            "streamer": streamer,
-                            "formatted_name": formatted,
-                            "content": "",
-                            "link": ""
-                        }
-                else:
-                    random_entry = {
-                        "streamer": streamer,
-                        "formatted_name": formatted,
-                        "content": result["content"],
-                        "link": result["url"]
-                    }
-                    wiki_entry = {
-                        "streamer": streamer,
-                        "formatted_name": formatted,
-                        "wikipedia_summary": "Failed to retrieve Wikipedia page.",
-                        "link": ""
-                    }
-            else:
+        # First attempt: Google search fallback (only method now)
+        result = fetch_google_scrapable_content(streamer)
+        if result["url"]:
+            if "wikipedia.org" in result["url"]:
+                # Since it's a Wikipedia link, store it in wiki_data.
+                wiki_entry = {
+                    "streamer": streamer,
+                    "formatted_name": formatted,
+                    "wikipedia_summary": result["content"],
+                    "link": result["url"],
+                    "source": result["source"]
+                }
                 random_entry = {
                     "streamer": streamer,
                     "formatted_name": formatted,
                     "content": "",
-                    "link": ""
+                    "link": "",
+                    "source": ""
+                }
+            else:
+                # For non-Wikipedia links, store in random_data.
+                random_entry = {
+                    "streamer": streamer,
+                    "formatted_name": formatted,
+                    "content": result["content"],
+                    "link": result["url"],
+                    "source": result["source"]
                 }
                 wiki_entry = {
                     "streamer": streamer,
                     "formatted_name": formatted,
                     "wikipedia_summary": "Failed to retrieve Wikipedia page.",
-                    "link": ""
+                    "link": "",
+                    "source": ""
                 }
+        else:
+            random_entry = {
+                "streamer": streamer,
+                "formatted_name": formatted,
+                "content": "",
+                "link": "",
+                "source": ""
+            }
+            wiki_entry = {
+                "streamer": streamer,
+                "formatted_name": formatted,
+                "wikipedia_summary": "Failed to retrieve Wikipedia page.",
+                "link": "",
+                "source": ""
+            }
         
         wiki_data[streamer] = wiki_entry
         random_data[streamer] = random_entry
@@ -229,6 +170,7 @@ def compile_streamer_wikipedia():
     
     print("Processing complete. Data saved to wikipage2.json and random.json.")
 
+
 if __name__ == "__main__":
     try:
         compile_streamer_wikipedia()
@@ -236,4 +178,3 @@ if __name__ == "__main__":
         print("\nScript interrupted by user.")
     except Exception as e:
         print(f"Unexpected error: {e}")
-  
