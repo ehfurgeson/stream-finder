@@ -38,6 +38,16 @@ elif isinstance(wiki_data, dict):
     print(f"Wiki data: dict with {len(wiki_data)} entries")
 print(f"Twitch data: {type(twitch_data)}, {len(twitch_data)} streamers")
 
+# -- Load CSV data about streamers --
+csv_path = os.path.join(current_directory, "streamer_details.csv")
+streamer_csv = pd.read_csv(csv_path).fillna("")  # Safely fill NaNs with empty strings
+
+# Convert CSV rows into a dict keyed by uppercase Name
+streamer_csv_data = {}
+for _, row in streamer_csv.iterrows():
+    name_upper = str(row["Name"]).upper().strip()
+    streamer_csv_data[name_upper] = dict(row)
+
 # Create inverted index for boolean search (temporary solution for prototype)
 def create_index():
     index = defaultdict(list)
@@ -187,11 +197,43 @@ def score_results(results, query):
 
 def get_twitch_info(streamer_name):
     """Get Twitch page info for a streamer if available"""
-    # Case insensitive search
+    # Case insensitive search by trying multiple case formats
+    original_name = streamer_name
     upper_name = streamer_name.upper()
-    if upper_name in twitch_data:
-        return twitch_data[upper_name]
+    lower_name = streamer_name.lower()
+    title_name = streamer_name.title()
+    no_spaces_name = streamer_name.replace(" ", "").upper()
+    
+    # Try all variations of the name
+    for name_variant in [original_name, upper_name, lower_name, title_name, no_spaces_name]:
+        if name_variant in twitch_data:
+            return twitch_data[name_variant]
+    
+    # If we reach here, the streamer wasn't found
+    print(f"No Twitch data found for streamer: {streamer_name} (tried {original_name}, {upper_name}, {lower_name}, {title_name}, {no_spaces_name})")
     return None
+
+def get_streamer_image_path(streamer_name):
+    """Get the image path for a streamer if available"""
+    # Try different formats of the name for image lookup
+    image_paths = [
+        f"images/streamer_images/{streamer_name.upper()}.jpg",
+        f"images/streamer_images/{streamer_name}.jpg",
+        f"images/streamer_images/{streamer_name.lower()}.jpg",
+        f"images/streamer_images/{streamer_name.replace(' ', '')}.jpg"
+    ]
+    
+    # In a real app, you would check if these files exist
+    # For now, just return the first path format and let the frontend handle missing images
+    return image_paths[0]
+
+def get_csv_streamer_info(streamer_name):
+    """
+    Look up extra CSV info (Rank, ID, Description, etc.) for the streamer
+    by matching the uppercase Name column from the CSV data.
+    """
+    name_upper = streamer_name.upper().strip()
+    return streamer_csv_data.get(name_upper, None)
 
 app = Flask(__name__)
 CORS(app)
@@ -200,7 +242,7 @@ search_index = create_index()
 
 @app.route("/")
 def home():
-    return render_template("base.html", title = "Streamer Search")
+    return render_template("base.html", title="Streamer Search")
 
 @app.route("/search")
 def search_streamer():
@@ -225,10 +267,14 @@ def search_streamer():
     # Format final results
     final_results = []
     for streamer, data in streamer_results.items():
+        csv_info = get_csv_streamer_info(streamer)
         final_results.append({
             "name": streamer,
             "documents": data["documents"],
-            "twitch_info": data["twitch_info"]
+            "twitch_info": data["twitch_info"],
+            "image_path": get_streamer_image_path(streamer),
+            # Optionally include CSV data if available
+            "csv_data": csv_info
         })
     
     # Sort by highest scoring document from each streamer
@@ -240,4 +286,4 @@ def search_streamer():
     return jsonify(final_results)
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5001)
