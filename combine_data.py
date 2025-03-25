@@ -33,7 +33,7 @@ def combine_data():
         "reddit": reddit_data,
         "twitter": twitter_data,
         "wiki": wiki_data,
-        "random": random_data  # Add to combined data
+        "twitchpage": random_data  # Add to combined data
     }
     
     # Write to init.json
