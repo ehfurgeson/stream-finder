@@ -1,15 +1,21 @@
 <!doctype html>
-<title>{% block title %}{% endblock %} - Flaskr</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<title>{% block title %}{% endblock %} - Streamer Search</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Kanit&family=Montserrat&family=Open+Sans:wght@500&display=swap"
     rel="stylesheet">
 
-<body>
+<body class="dark-theme">
     <div class="full-body-container">
         <div class="top-text">
             <img style="width: 20vw;" src="{{ url_for('static', filename='images/logo.png') }}" />
+            <div class="theme-toggle">
+                <label class="switch">
+                    <input type="checkbox" id="theme-switch" checked>
+                    <span class="slider round"></span>
+                </label>
+                <span class="toggle-label">Dark Mode</span>
+            </div>
             <div class="input-box" onclick="sendFocus()">
                 <img src="{{ url_for('static', filename='images/mag.png') }}" />
                 <input placeholder="Search for a Twitch streamer" id="filter-text-val" onkeyup="filterText()">
@@ -22,10 +28,34 @@
 
 
     <script>
+        // Theme toggle functionality
+        document.addEventListener('DOMContentLoaded', function () {
+            const themeSwitch = document.getElementById('theme-switch');
+
+            // Set dark theme by default
+            document.body.classList.add('dark-theme');
+            themeSwitch.checked = true;
+            localStorage.setItem('theme', 'dark');
+
+            // Add event listener for theme toggle
+            themeSwitch.addEventListener('change', function () {
+                if (this.checked) {
+                    document.body.classList.add('dark-theme');
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    document.body.classList.remove('dark-theme');
+                    localStorage.setItem('theme', 'light');
+                }
+            });
+        });
+
         function streamerCardTemplate(streamerData) {
             // Create the Twitch profile section if available
             let twitchSection = "";
             if (streamerData.twitch_info) {
+                // Make sure we have a username, use the streamer name as fallback
+                const username = streamerData.twitch_info.username || streamerData.name;
+
                 twitchSection = `
                     <div class="twitch-profile">
                         <div class="streamer-header">
@@ -34,7 +64,7 @@
                                 <h3>${streamerData.name}</h3>
                                 <a href="${streamerData.twitch_info.url}" target="_blank" class="twitch-link">
                                     <img src="/static/images/logo.png" alt="Twitch" class="twitch-icon" />
-                                    Visit ${streamerData.twitch_info.username}'s Twitch Channel
+                                    Visit ${username}'s Twitch Channel
                                 </a>
                             </div>
                         </div>
@@ -116,19 +146,137 @@
     </script>
 
     <style>
-        /* Add some basic styles for the new components */
+        /* Base styles (light theme) */
+        :root {
+            --bg-color: #f8f9fa;
+            --card-bg: white;
+            --text-color: #333;
+            --secondary-text: #666;
+            --border-color: #ddd;
+            --accent-color: #6441a5;
+            --hover-bg: rgba(100, 65, 165, 0.1);
+            --shadow-color: rgba(0, 0, 0, 0.1);
+            --card-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+            --input-bg: white;
+            --document-bg: #f9f9f9;
+        }
+
+        /* Dark theme variables */
+        body.dark-theme {
+            --bg-color: #1a1a1a;
+            --card-bg: #2a2a2a;
+            --text-color: #eee;
+            --secondary-text: #b0b0b0;
+            --border-color: #444;
+            --accent-color: #9147ff;
+            --hover-bg: rgba(145, 71, 255, 0.2);
+            --shadow-color: rgba(0, 0, 0, 0.3);
+            --card-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+            --input-bg: #333;
+            --document-bg: #2c2c2c;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.3s ease, color 0.3s ease;
+            margin: 0;
+            padding: 0;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .full-body-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: start;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .input-box {
+            border-radius: 50px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            margin-top: 20px;
+            padding: 12px 20px;
+            width: 50vw;
+            background-color: var(--input-bg);
+            box-shadow: 0 2px 8px var(--shadow-color);
+            transition: all 0.2s ease;
+        }
+
+        .input-box:hover {
+            box-shadow: 0 4px 12px var(--shadow-color);
+            border-color: var(--accent-color);
+        }
+
+        .input-box img {
+            height: 20px;
+            width: 20px;
+            filter: var(--icon-filter);
+        }
+
+        .top-text {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 30px;
+            position: relative;
+            width: 100%;
+        }
+
+        .input-box input {
+            width: 100%;
+            margin-left: 10px;
+            font-size: 16px;
+            border: none;
+            outline: 0;
+            font-family: 'Montserrat', sans-serif;
+            background-color: transparent;
+            color: var(--text-color);
+        }
+
+        #answer-box {
+            width: 700px;
+            margin-top: 50px;
+            padding-bottom: 50px;
+        }
+
+        .name {
+            font-family: 'Kanit', sans-serif;
+        }
+
+        .doc {
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        /* Streamer card and image styles */
         .streamer-card {
             margin-bottom: 20px;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 12px;
+            background-color: var(--card-bg);
+            box-shadow: var(--card-shadow);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 1px solid var(--border-color);
+        }
+
+        .streamer-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px var(--shadow-color);
         }
 
         .twitch-profile {
             margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
         }
 
         .streamer-header {
@@ -137,64 +285,208 @@
         }
 
         .streamer-image {
-            width: 60px;
-            height: 60px;
+            width: 70px;
+            height: 70px;
             border-radius: 50%;
             object-fit: cover;
             margin-right: 15px;
-            border: 2px solid #6441a5;
+            border: 3px solid var(--accent-color);
+            box-shadow: 0 3px 6px var(--shadow-color);
         }
 
         .streamer-info {
             flex: 1;
         }
 
+        .streamer-info h3 {
+            margin: 0 0 8px 0;
+            font-family: 'Kanit', sans-serif;
+            font-size: 24px;
+            color: var(--text-color);
+        }
+
         .twitch-link {
             display: inline-flex;
             align-items: center;
-            color: #6441a5;
+            color: white;
             text-decoration: none;
             font-weight: bold;
+            padding: 6px 12px;
+            border-radius: 5px;
+            background-color: var(--accent-color);
+            transition: background-color 0.2s ease;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .twitch-link:hover {
+            background-color: #7a57bc;
         }
 
         .twitch-icon {
             width: 24px;
             height: 24px;
             margin-right: 8px;
+            filter: brightness(0) invert(1);
         }
 
         .document-list {
-            margin-top: 10px;
+            margin-top: 15px;
+        }
+
+        .document-list h4 {
+            margin: 0 0 12px 0;
+            font-family: 'Kanit', sans-serif;
+            color: var(--text-color);
         }
 
         .document-item {
             margin-bottom: 10px;
-            padding: 10px;
-            background-color: white;
-            border-radius: 4px;
-            border-left: 3px solid #ddd;
+            padding: 15px;
+            background-color: var(--document-bg);
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-color);
+            transition: transform 0.1s ease;
+        }
+
+        .document-item:hover {
+            transform: translateX(3px);
         }
 
         .document-item .doc {
-            margin-bottom: 5px;
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-color);
         }
 
         .meta-info {
             display: flex;
             justify-content: space-between;
             font-size: 0.85em;
-            color: #666;
+            color: var(--secondary-text);
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .source {
+            font-weight: 500;
+        }
+
+        .sim-score {
+            color: var(--accent-color);
+            font-weight: 500;
         }
 
         .no-results,
         .error {
-            padding: 20px;
+            padding: 30px;
             text-align: center;
-            color: #666;
+            color: var(--secondary-text);
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
         }
 
         .error {
             color: #cc0000;
+            border-left: 4px solid #cc0000;
+        }
+
+        /* Theme toggle styles */
+        .theme-toggle {
+            position: absolute;
+            top: -15px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            padding: 5px 10px;
+            background-color: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 2px 5px var(--shadow-color);
+            z-index: 100;
+        }
+
+        .toggle-label {
+            margin-left: 10px;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 14px;
+            color: var(--text-color);
+        }
+
+        /* Toggle switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "☀️";
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            font-size: 10px;
+        }
+
+        input:checked+.slider {
+            background-color: var(--accent-color);
+        }
+
+        input:focus+.slider {
+            box-shadow: 0 0 1px var(--accent-color);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(26px);
+            content: "🌙";
+            font-size: 12px;
+            /* Increased moon size */
+        }
+
+        .slider.round {
+            border-radius: 34px;
+        }
+
+        .slider.round:before {
+            border-radius: 50%;
+        }
+
+        /* Document item color by source */
+        .document-item[data-source="wiki"] {
+            border-left-color: #36c;
+        }
+
+        .document-item[data-source="twitter"] {
+            border-left-color: #1da1f2;
+        }
+
+        .document-item[data-source="reddit"] {
+            border-left-color: #ff4500;
         }
     </style>
 </body>
