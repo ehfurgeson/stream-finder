@@ -38,6 +38,16 @@ elif isinstance(wiki_data, dict):
     print(f"Wiki data: dict with {len(wiki_data)} entries")
 print(f"Twitch data: {type(twitch_data)}, {len(twitch_data)} streamers")
 
+# -- Load CSV data about streamers --
+csv_path = os.path.join(current_directory, "streamer_details.csv")
+streamer_csv = pd.read_csv(csv_path).fillna("")  # Safely fill NaNs with empty strings
+
+# Convert CSV rows into a dict keyed by uppercase Name
+streamer_csv_data = {}
+for _, row in streamer_csv.iterrows():
+    name_upper = str(row["Name"]).upper().strip()
+    streamer_csv_data[name_upper] = dict(row)
+
 # Create inverted index for boolean search (temporary solution for prototype)
 def create_index():
     index = defaultdict(list)
@@ -217,6 +227,13 @@ def get_streamer_image_path(streamer_name):
     # For now, just return the first path format and let the frontend handle missing images
     return image_paths[0]
 
+def get_csv_streamer_info(streamer_name):
+    """
+    Look up extra CSV info (Rank, ID, Description, etc.) for the streamer
+    by matching the uppercase Name column from the CSV data.
+    """
+    name_upper = streamer_name.upper().strip()
+    return streamer_csv_data.get(name_upper, None)
 
 app = Flask(__name__)
 CORS(app)
@@ -225,7 +242,7 @@ search_index = create_index()
 
 @app.route("/")
 def home():
-    return render_template("base.html", title = "Streamer Search")
+    return render_template("base.html", title="Streamer Search")
 
 @app.route("/search")
 def search_streamer():
@@ -250,11 +267,14 @@ def search_streamer():
     # Format final results
     final_results = []
     for streamer, data in streamer_results.items():
+        csv_info = get_csv_streamer_info(streamer)
         final_results.append({
             "name": streamer,
             "documents": data["documents"],
             "twitch_info": data["twitch_info"],
-            "image_path": get_streamer_image_path(streamer)
+            "image_path": get_streamer_image_path(streamer),
+            # Optionally include CSV data if available
+            "csv_data": csv_info
         })
     
     # Sort by highest scoring document from each streamer
