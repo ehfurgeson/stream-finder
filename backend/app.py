@@ -7,38 +7,36 @@ import pandas as pd
 from collections import defaultdict
 import re
 
-# ROOT_PATH for linking with all your files. 
-# Feel free to use a config.py or settings.py with a global export variable
+# Set ROOT_PATH for linking files
 os.environ["ROOT_PATH"] = os.path.abspath(os.path.join("..", os.curdir))
 
-# Get the directory of the current script
+# Get the directory of the current script (backend folder)
 current_directory = os.path.dirname(os.path.abspath(__file__))
 
-# Specify the path to the json file relative to the current script
+# Specify the path to the JSON file (init.json) in the backend folder
 json_path = os.path.join(current_directory, "init.json")
 
-# Load the json data
-with open(json_path, "r") as file:
+# Load the JSON data with UTF-8 encoding
+with open(json_path, "r", encoding="utf-8") as file:
     combined_data = json.load(file)
 
 # Extract the individual datasets
 reddit_data = combined_data["reddit"]
 twitter_data = combined_data["twitter"]
 wiki_data = combined_data["wiki"]
-twitch_data = combined_data["twitchpage"]
+details_data = combined_data["details"]
 
 # Debug info about data structure
 print("Data structure loaded:")
 print(f"Reddit data: {type(reddit_data)}, {len(reddit_data)} streamers")
 print(f"Twitter data: {type(twitter_data)}, {len(twitter_data)} streamers")
-print(f"Wiki data: {type(wiki_data)}")
-if isinstance(wiki_data, list):
-    print(f"Wiki data: list with {len(wiki_data)} entries")
-elif isinstance(wiki_data, dict):
+if isinstance(wiki_data, dict):
     print(f"Wiki data: dict with {len(wiki_data)} entries")
-print(f"Twitch data: {type(twitch_data)}, {len(twitch_data)} streamers")
+elif isinstance(wiki_data, list):
+    print(f"Wiki data: list with {len(wiki_data)} entries")
+print(f"Details data: {type(details_data)}, {len(details_data)} streamers")
 
-# -- Load CSV data about streamers --
+# Load CSV data about streamers for additional details (if needed)
 csv_path = os.path.join(current_directory, "streamer_details.csv")
 streamer_csv = pd.read_csv(csv_path).fillna("")  # Safely fill NaNs with empty strings
 
@@ -51,57 +49,58 @@ for _, row in streamer_csv.iterrows():
 # Create inverted index for boolean search (temporary solution for prototype)
 def create_index():
     index = defaultdict(list)
+    # Index Reddit posts (titles)
     for streamer, data in reddit_data.items():
         for i, post in enumerate(data):
             title = post["Title"].lower()
             words = re.findall(r"\w+", title)
             for word in words:
                 index[word].append(("reddit", streamer, i))
+    # Index Twitter posts (full text)
     for streamer, tweets in twitter_data.items():
         for i, tweet in enumerate(tweets):
             tweet_text = tweet.lower()
             words = re.findall(r"\w+", tweet_text)
             for word in words:
                 index[word].append(("twitter", streamer, i))
-    # Handle wiki data - check if it's a dictionary with entries or a list
+    # Index Wiki summaries
     if isinstance(wiki_data, dict):
         for streamer, entry in wiki_data.items():
             if isinstance(entry, dict) and "wikipedia_summary" in entry:
-                if (entry["wikipedia_summary"] != "Search error, unable to fetch summary."
-                    and entry["wikipedia_summary"] != "Failed to retrieve Wikipedia page."):
-                    summary = entry["wikipedia_summary"].lower()
-                    words = re.findall(r"\w+", summary)
-                    for word in words:
-                        index[word].append(("wiki", streamer, 0))
+                summary = entry["wikipedia_summary"].lower()
+                words = re.findall(r"\w+", summary)
+                for word in words:
+                    index[word].append(("wiki", streamer, 0))
     elif isinstance(wiki_data, list):
         for i, entry in enumerate(wiki_data):
             if isinstance(entry, dict) and "wikipedia_summary" in entry and "streamer" in entry:
-                if (entry["wikipedia_summary"] != "Search error, unable to fetch summary."
-                    and entry["wikipedia_summary"] != "Failed to retrieve Wikipedia page."):
-                    summary = entry["wikipedia_summary"].lower()
-                    words = re.findall(r"\w+", summary)
-                    for word in words:
-                        index[word].append(("wiki", entry["streamer"], i))
+                summary = entry["wikipedia_summary"].lower()
+                words = re.findall(r"\w+", summary)
+                for word in words:
+                    index[word].append(("wiki", entry["streamer"], i))
+    # Index Details descriptions (convert to string first)
+    for streamer, details in details_data.items():
+        description = str(details.get("Description", "")).lower()
+        words = re.findall(r"\w+", description)
+        for word in words:
+            index[word].append(("details", streamer, 0))
     return index
 
 # Simple search function for prototype
 def search(query, index):
     query = query.strip().lower()
     terms = re.findall(r"\w+", query)
-
     if not terms:
         return []
     
     doc_matches = defaultdict(int)
     doc_info = {}
-
     for term in terms:
         if term in index:
             for doc in index[term]:
                 source, streamer, idx = doc
                 doc_id = f"{source}:{streamer}:{idx}"
                 doc_matches[doc_id] += 1
-
                 if doc_id not in doc_info:
                     if source == "reddit":
                         doc_info[doc_id] = {
@@ -122,10 +121,8 @@ def search(query, index):
                             "idx": idx
                         }
                     elif source == "wiki":
-                        # Handle wiki data based on its structure
                         wiki_entry = None
                         wiki_text = ""
-                        
                         if isinstance(wiki_data, dict) and streamer in wiki_data:
                             wiki_entry = wiki_data[streamer]
                             if isinstance(wiki_entry, dict) and "wikipedia_summary" in wiki_entry:
@@ -134,13 +131,23 @@ def search(query, index):
                             wiki_entry = wiki_data[idx]
                             if isinstance(wiki_entry, dict) and "wikipedia_summary" in wiki_entry:
                                 wiki_text = wiki_entry["wikipedia_summary"]
-                        
                         doc_info[doc_id] = {
                             "source": "wiki",
                             "streamer": streamer,
                             "data": wiki_entry,
                             "text": wiki_text,
-                            "score": 2,  # Default score for wiki entries
+                            "score": 2,
+                            "idx": idx
+                        }
+                    elif source == "details":
+                        detail_entry = details_data.get(streamer, {})
+                        description = detail_entry.get("Description", "")
+                        doc_info[doc_id] = {
+                            "source": "details",
+                            "streamer": streamer,
+                            "data": detail_entry,
+                            "text": description,
+                            "score": 3,  # Boost for details.
                             "idx": idx
                         }
     results = []
@@ -153,87 +160,74 @@ def search(query, index):
 def score_results(results, query):
     query_terms = set(re.findall(r"\w+", query.lower()))
     scored_results = []
-    
     for doc in results:
         score = 0
         text = doc["text"].lower()
-        
-        # Binary term match score
         term_match_score = doc.get("term_matches", 0) * 15
         score += term_match_score
-        
-        # Term frequency score
         for term in query_terms:
             count = text.count(term.lower())
             score += count * 5
-        
-        # Source-based scoring
         if doc["source"] == "reddit":
             reddit_score_boost = min(doc["score"] / 500, 20)
             score += reddit_score_boost
         elif doc["source"] == "wiki":
             score += 15
-        
-        if " ".join(query_terms) in text.lower():
+        elif doc["source"] == "details":
+            score += 10  # Boost for details.
+        if " ".join(query_terms) in text:
             score += 50
-        
-        # Format result
         formatted_doc = {
             "source": doc["source"],
             "name": doc["streamer"],
             "doc": doc["text"][:150] + "..." if len(doc["text"]) > 150 else doc["text"],
             "sim_score": round(score, 2)
         }
-        
         if doc["source"] == "reddit":
             formatted_doc["reddit_score"] = doc["score"]
             formatted_doc["id"] = doc["data"]["ID"]
-        
         scored_results.append((formatted_doc, score))
-    
     scored_results.sort(key=lambda x: x[1], reverse=True)
-    
     return [doc for doc, _ in scored_results]
 
 def get_twitch_info(streamer_name):
-    """Get Twitch page info for a streamer if available"""
-    # Case insensitive search by trying multiple case formats
-    original_name = streamer_name
-    upper_name = streamer_name.upper()
-    lower_name = streamer_name.lower()
-    title_name = streamer_name.title()
-    no_spaces_name = streamer_name.replace(" ", "").upper()
-    
-    # Try all variations of the name
-    for name_variant in [original_name, upper_name, lower_name, title_name, no_spaces_name]:
-        if name_variant in twitch_data:
-            return twitch_data[name_variant]
-    
-    # If we reach here, the streamer wasn't found
-    print(f"No Twitch data found for streamer: {streamer_name} (tried {original_name}, {upper_name}, {lower_name}, {title_name}, {no_spaces_name})")
+    """Get Twitch page info for a streamer if available."""
+    variants = [
+        streamer_name,
+        streamer_name.upper(),
+        streamer_name.lower(),
+        streamer_name.title(),
+        streamer_name.replace(" ", "")
+    ]
+    for name_variant in variants:
+        if name_variant in streamer_csv_data:
+            data = streamer_csv_data[name_variant]
+            if "Twitch URL" in data and data["Twitch URL"].strip():
+                return data
+            else:
+                default_url = f"https://www.twitch.tv/{streamer_name}"
+                data["url"] = default_url
+                return data
+    print(f"No Twitch data found for streamer: {streamer_name}")
     return None
 
 def get_streamer_image_path(streamer_name):
-    """Get the image path for a streamer if available"""
-    # Try different formats of the name for image lookup
+    """Get the image path for a streamer if available."""
     image_paths = [
         f"images/streamer_images/{streamer_name.upper()}.jpg",
         f"images/streamer_images/{streamer_name}.jpg",
         f"images/streamer_images/{streamer_name.lower()}.jpg",
         f"images/streamer_images/{streamer_name.replace(' ', '')}.jpg"
     ]
-    
-    # In a real app, you would check if these files exist
-    # For now, just return the first path format and let the frontend handle missing images
     return image_paths[0]
 
 def get_csv_streamer_info(streamer_name):
-    """
-    Look up extra CSV info (Rank, ID, Description, etc.) for the streamer
-    by matching the uppercase Name column from the CSV data.
-    """
+    """Look up extra CSV info for the streamer from streamer_details.csv."""
     name_upper = streamer_name.upper().strip()
     return streamer_csv_data.get(name_upper, None)
+
+from flask import Flask, render_template, request, jsonify
+from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
@@ -264,7 +258,6 @@ def search_streamer():
             }
         streamer_results[streamer]["documents"].append(result)
     
-    # Format final results
     final_results = []
     for streamer, data in streamer_results.items():
         csv_info = get_csv_streamer_info(streamer)
@@ -273,11 +266,9 @@ def search_streamer():
             "documents": data["documents"],
             "twitch_info": data["twitch_info"],
             "image_path": get_streamer_image_path(streamer),
-            # Optionally include CSV data if available
             "csv_data": csv_info
         })
     
-    # Sort by highest scoring document from each streamer
     final_results.sort(
         key=lambda x: max([doc["sim_score"] for doc in x["documents"]]) if x["documents"] else 0, 
         reverse=True
