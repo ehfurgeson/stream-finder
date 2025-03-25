@@ -102,4 +102,8 @@ if __name__ == "__main__":
     print("\nProcessing random.json...")
     clean_and_check_json('random.json', 'top_1000_twitch.csv')
 
+    print("\nProcessing random.json...")
+    clean_and_check_json('twitchpage.json', 'top_1000_twitch.csv')
+
+
 
