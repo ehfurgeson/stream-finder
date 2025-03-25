@@ -7,66 +7,81 @@
     rel="stylesheet">
 
 <body>
-        <div class="full-body-container">
-                <div class="top-text">
-                        <img style="width: 20vw;" src="{{ url_for('static', filename='images/logo.png') }}" />
-                        <div class="input-box" onclick="sendFocus()">
-                                <img src="{{ url_for('static', filename='images/mag.png') }}" />
-                                <input placeholder="Search for a Twitch streamer" id="filter-text-val"
-                    onkeyup="filterText()">
-                            </div>
-                    </div>
-                <div id="answer-box">
-                        <!-- Search results will populate here -->
-                    </div>
-            </div>
+    <div class="full-body-container">
+        <div class="top-text">
+            <img style="width: 20vw;" src="{{ url_for('static', filename='images/logo.png') }}" />
+            <div class="input-box" onclick="sendFocus()">
+                <img src="{{ url_for('static', filename='images/mag.png') }}" />
+                <input placeholder="Search for a Twitch streamer" id="filter-text-val" onkeyup="filterText()">
+            </div>
+        </div>
+        <div id="answer-box">
+            <!-- Search results will populate here -->
+        </div>
+    </div>
 
-        
+
     <script>
         function streamerCardTemplate(streamerData) {
             // Create the Twitch profile section if available
             let twitchSection = "";
             if (streamerData.twitch_info) {
                 twitchSection = `
-                    <div class="twitch-profile">
-                        <h3>${streamerData.name}</h3>
-                        <a href="${streamerData.twitch_info.url}" target="_blank" class="twitch-link">
-                            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Twitch" class="twitch-icon" />
-                            Visit ${streamerData.twitch_info.username}'s Twitch Channel
-                        </a>
-                    </div>
-                `;
+                    <div class="twitch-profile">
+                        <div class="streamer-header">
+                            <img src="/static/${streamerData.image_path}" alt="${streamerData.name}" class="streamer-image" />
+                            <div class="streamer-info">
+                                <h3>${streamerData.name}</h3>
+                                <a href="${streamerData.twitch_info.url}" target="_blank" class="twitch-link">
+                                    <img src="/static/images/logo.png" alt="Twitch" class="twitch-icon" />
+                                    Visit ${streamerData.twitch_info.username}'s Twitch Channel
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                twitchSection = `
+                    <div class="twitch-profile">
+                        <div class="streamer-header">
+                            <img src="/static/${streamerData.image_path}" alt="${streamerData.name}" class="streamer-image" />
+                            <div class="streamer-info">
+                                <h3>${streamerData.name}</h3>
+                            </div>
+                        </div>
+                    </div>
+                `;
             }
 
             // Create documents section
             let documentsHtml = "";
             if (streamerData.documents && streamerData.documents.length > 0) {
                 documentsHtml = `
-                    <div class="document-list">
-                        <h4>Related Content</h4>
-                        ${streamerData.documents.map(doc => documentTemplate(doc)).join('')}
-                    </div>
-                `;
+                    <div class="document-list">
+                        <h4>Related Content</h4>
+                        ${streamerData.documents.map(doc => documentTemplate(doc)).join('')}
+                    </div>
+                `;
             }
 
             return `
-                <div class="streamer-card">
-                    ${twitchSection}
-                    ${documentsHtml}
-                </div>
-            `;
+                <div class="streamer-card">
+                    ${twitchSection}
+                    ${documentsHtml}
+                </div>
+            `;
         }
 
         function documentTemplate(doc) {
             return `
-                <div class="document-item">
-                    <p class="doc">${doc.doc}</p>
-                    <div class="meta-info">
-                        <span class="source">Source: ${doc.source}</span>
-                        <span class="sim-score">Score: ${doc.sim_score}</span>
-                    </div>
-                </div>
-            `;
+                <div class="document-item">
+                    <p class="doc">${doc.doc}</p>
+                    <div class="meta-info">
+                        <span class="source">Source: ${doc.source}</span>
+                        <span class="sim-score">Score: ${doc.sim_score}</span>
+                    </div>
+                </div>
+            `;
         }
 
         function sendFocus() {
@@ -100,7 +115,7 @@
         }
     </script>
 
-        <style>
+    <style>
         /* Add some basic styles for the new components */
         .streamer-card {
             margin-bottom: 20px;
@@ -114,6 +129,24 @@
             margin-bottom: 15px;
             padding-bottom: 10px;
             border-bottom: 1px solid #eee;
+        }
+
+        .streamer-header {
+            display: flex;
+            align-items: center;
+        }
+
+        .streamer-image {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 15px;
+            border: 2px solid #6441a5;
+        }
+
+        .streamer-info {
+            flex: 1;
         }
 
         .twitch-link {
