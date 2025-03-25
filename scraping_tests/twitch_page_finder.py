@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 INITIAL_DELAY = 5
 MAX_DELAY = 120  # Maximum delay in seconds
-OUTPUT_FILE = "filtered_twitchpage.json"
+OUTPUT_FILE = "filtered_streamers.json"
 
 def read_streamers_from_csv(file_path="top_1000_twitch.csv"):
     """Read streamer names from CSV file."""
@@ -298,7 +298,7 @@ def load_json_file(filename):
 def scrape_twitch_pages():
     """
     Process each streamer and search for their Twitch page using multiple methods,
-    saving results to filtered_twitchpage.json
+    saving results to filtered_streamers.json
     """
     streamers = read_streamers_from_csv()
     if not streamers:
