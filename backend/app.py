@@ -193,6 +193,15 @@ def get_twitch_info(streamer_name):
         return twitch_data[upper_name]
     return None
 
+def get_streamer_image_path(streamer_name):
+    """Get the image path for a streamer if available"""
+    # Hardcoded path as specified
+    image_path = f"images/streamer_images/{streamer_name.upper()}.jpg"
+    
+    # Check if the image exists
+    return image_path
+
+
 app = Flask(__name__)
 CORS(app)
 
@@ -228,7 +237,8 @@ def search_streamer():
         final_results.append({
             "name": streamer,
             "documents": data["documents"],
-            "twitch_info": data["twitch_info"]
+            "twitch_info": data["twitch_info"],
+            "image_path": get_streamer_image_path(streamer)
         })
     
     # Sort by highest scoring document from each streamer
