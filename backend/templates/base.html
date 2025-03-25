@@ -56,14 +56,28 @@
                 // Make sure we have a username, use the streamer name as fallback
                 const username = streamerData.twitch_info.username || streamerData.name;
 
+                // Debug logging to check what data is available
+                console.log("Streamer data:", streamerData);
+                console.log("Twitch info:", streamerData.twitch_info);
+                
+                // Check if the image path is valid, use a placeholder if not
+                const imagePath = streamerData.image_path || "images/placeholder.jpg";
+                
                 twitchSection = `
                     <div class="twitch-profile">
                         <div class="streamer-header">
-                            <img src="/static/${streamerData.image_path}" alt="${streamerData.name}" class="streamer-image" />
+                            <img src="/static/${imagePath}" 
+                                alt="${streamerData.name}" 
+                                class="streamer-image"
+                                onerror="this.src='/static/images/placeholder.jpg'" />
                             <div class="streamer-info">
                                 <h3>${streamerData.name}</h3>
-                                <a href="${streamerData.twitch_info.url}" target="_blank" class="twitch-link">
-                                    <img src="/static/images/logo.png" alt="Twitch" class="twitch-icon" />
+                                <a href="${streamerData.twitch_info.url}" 
+                                target="_blank" 
+                                class="twitch-link">
+                                    <img src="/static/images/logo.png" 
+                                        alt="Twitch" 
+                                        class="twitch-icon" />
                                     Visit ${username}'s Twitch Channel
                                 </a>
                             </div>
@@ -74,9 +88,12 @@
                 twitchSection = `
                     <div class="twitch-profile">
                         <div class="streamer-header">
-                            <img src="/static/${streamerData.image_path}" alt="${streamerData.name}" class="streamer-image" />
+                            <img src="/static/images/placeholder.jpg" 
+                                alt="${streamerData.name}" 
+                                class="streamer-image" />
                             <div class="streamer-info">
                                 <h3>${streamerData.name}</h3>
+                                <p>No Twitch information available</p>
                             </div>
                         </div>
                     </div>

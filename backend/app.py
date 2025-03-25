@@ -187,19 +187,35 @@ def score_results(results, query):
 
 def get_twitch_info(streamer_name):
     """Get Twitch page info for a streamer if available"""
-    # Case insensitive search
+    # Case insensitive search by trying multiple case formats
+    original_name = streamer_name
     upper_name = streamer_name.upper()
-    if upper_name in twitch_data:
-        return twitch_data[upper_name]
+    lower_name = streamer_name.lower()
+    title_name = streamer_name.title()
+    no_spaces_name = streamer_name.replace(" ", "").upper()
+    
+    # Try all variations of the name
+    for name_variant in [original_name, upper_name, lower_name, title_name, no_spaces_name]:
+        if name_variant in twitch_data:
+            return twitch_data[name_variant]
+    
+    # If we reach here, the streamer wasn't found
+    print(f"No Twitch data found for streamer: {streamer_name} (tried {original_name}, {upper_name}, {lower_name}, {title_name}, {no_spaces_name})")
     return None
 
 def get_streamer_image_path(streamer_name):
     """Get the image path for a streamer if available"""
-    # Hardcoded path as specified
-    image_path = f"images/streamer_images/{streamer_name.upper()}.jpg"
+    # Try different formats of the name for image lookup
+    image_paths = [
+        f"images/streamer_images/{streamer_name.upper()}.jpg",
+        f"images/streamer_images/{streamer_name}.jpg",
+        f"images/streamer_images/{streamer_name.lower()}.jpg",
+        f"images/streamer_images/{streamer_name.replace(' ', '')}.jpg"
+    ]
     
-    # Check if the image exists
-    return image_path
+    # In a real app, you would check if these files exist
+    # For now, just return the first path format and let the frontend handle missing images
+    return image_paths[0]
 
 
 app = Flask(__name__)
