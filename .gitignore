@@ -1,20 +1,23 @@
+# Environment and cache files
 env/
+venv/
 .DS_Store
 Docker/__pycache__
-
-venv/
-
 *.pyc
 __pycache__/
-
 instance/
-
 .pytest_cache/
 .coverage
 htmlcov/
 
+# Build and distribution folders
 dist/
 build/
 *.egg-info/
+
+# Helper files
 helpers/*
 json_template/
+
+
+twitchapi.py
