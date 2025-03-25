@@ -1,55 +1,199 @@
-.full-body-container{
+.full-body-container {
     position: absolute;
-    top:0;
-    left:0;
-    right:0;
-    bottom:0;
-    width:100%;
-    height:100%;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
     display: flex;
     justify-content: start;
     align-items: center;
     flex-direction: column;
+    background-color: #f8f9fa;
 }
 
-.input-box{
+.input-box {
     border-radius: 50px;
-    border:1px solid black;
+    border: 1px solid #ddd;
     display: flex;
     align-items: center;
-    margin-top: 10px;
-    padding:12px;
+    margin-top: 20px;
+    padding: 12px 20px;
     width: 50vw;
+    background-color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
 }
 
-.input-box img{
+.input-box:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-color: #6441a5;
+}
+
+.input-box img {
     height: 20px;
-    width:20px;
+    width: 20px;
 }
 
-.top-text{
+.top-text {
     display: flex;
     flex-direction: column;
     align-items: center;
+    margin-top: 30px;
 }
 
-.input-box input{
+.input-box input {
     width: 100%;
     margin-left: 10px;
     font-size: 16px;
     border: none;
     outline: 0;
+    font-family: 'Montserrat', sans-serif;
 }
 
-#answer-box{
+#answer-box {
     width: 700px;
-    margin-top:50px; 
+    margin-top: 50px;
+    padding-bottom: 50px;
 }
 
-.name{
+.name {
     font-family: 'Kanit', sans-serif;
 }
 
-.doc{
+.doc {
     font-family: 'Montserrat', sans-serif;
+}
+
+/* Streamer card and image styles */
+.streamer-card {
+    margin-bottom: 20px;
+    padding: 20px;
+    border-radius: 12px;
+    background-color: white;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.streamer-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+}
+
+.twitch-profile {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.streamer-header {
+    display: flex;
+    align-items: center;
+}
+
+.streamer-image {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 15px;
+    border: 3px solid #6441a5;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+}
+
+.streamer-info {
+    flex: 1;
+}
+
+.streamer-info h3 {
+    margin: 0 0 8px 0;
+    font-family: 'Kanit', sans-serif;
+    font-size: 24px;
+    color: #222;
+}
+
+.twitch-link {
+    display: inline-flex;
+    align-items: center;
+    color: #6441a5;
+    text-decoration: none;
+    font-weight: bold;
+    padding: 5px 10px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.twitch-link:hover {
+    background-color: rgba(100, 65, 165, 0.1);
+}
+
+.twitch-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+}
+
+.document-list {
+    margin-top: 15px;
+}
+
+.document-list h4 {
+    margin: 0 0 12px 0;
+    font-family: 'Kanit', sans-serif;
+    color: #333;
+}
+
+.document-item {
+    margin-bottom: 10px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    border-left: 4px solid #6441a5;
+    transition: transform 0.1s ease;
+}
+
+.document-item:hover {
+    transform: translateX(3px);
+}
+
+.document-item .doc {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #333;
+}
+
+.meta-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85em;
+    color: #666;
+    font-family: 'Montserrat', sans-serif;
+}
+
+.source {
+    font-weight: 500;
+}
+
+.sim-score {
+    color: #6441a5;
+    font-weight: 500;
+}
+
+.no-results,
+.error {
+    padding: 30px;
+    text-align: center;
+    color: #666;
+    font-family: 'Montserrat', sans-serif;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+}
+
+.error {
+    color: #cc0000;
+    border-left: 4px solid #cc0000;
 }

@@ -4,224 +4,356 @@
         "content": "Twitch",
         "url": "https://www.twitch.tv/kaicenat",
         "validated": true,
-        "username": "kaicenat"
+        "username": "kaicenat",
+        "twitter": {
+            "handle": "kaicenat",
+            "url": "https://twitter.com/kaicenat"
+        },
+        "subreddit": "https://www.reddit.com/r/KaiCenat/"
     },
     "CAEDREL": {
         "streamer": "CAEDREL",
         "content": "Twitch",
         "url": "https://www.twitch.tv/caedrel",
         "validated": true,
-        "username": "caedrel"
+        "username": "caedrel",
+        "twitter": {
+            "handle": "caedrel",
+            "url": "https://twitter.com/caedrel"
+        },
+        "subreddit": "https://www.reddit.com/r/PedroPeepos"
     },
     "ZACKRAWRR": {
         "streamer": "ZACKRAWRR",
         "content": "Twitch",
         "url": "https://www.twitch.tv/zackrawrr",
         "validated": true,
-        "username": "zackrawrr"
+        "username": "zackrawrr",
+        "twitter": {
+            "handle": "zackrawrr",
+            "url": "https://twitter.com/zackrawrr"
+        },
+        "subreddit": "https://www.reddit.com/r/Asmongold/"
     },
     "JYNXZI": {
         "streamer": "JYNXZI",
         "content": "Twitch",
         "url": "https://www.twitch.tv/jynxzi",
         "validated": true,
-        "username": "jynxzi"
+        "username": "jynxzi",
+        "twitter": {
+            "handle": "jynxzi",
+            "url": "https://twitter.com/jynxzi"
+        },
+        "subreddit": "https://www.reddit.com/r/jynxzissg/"
     },
     "HASANABI": {
         "streamer": "HASANABI",
         "content": "Twitch",
         "url": "https://www.twitch.tv/hasanabi",
         "validated": true,
-        "username": "hasanabi"
+        "username": "hasanabi",
+        "twitter": {
+            "handle": "hasanthehun",
+            "url": "https://twitter.com/hasanthehun"
+        },
+        "subreddit": "https://www.reddit.com/r/Hasan_Piker/"
     },
     "PLAQUEBOYMAX": {
         "streamer": "PLAQUEBOYMAX",
         "content": "Twitch",
         "url": "https://www.twitch.tv/plaqueboymax",
         "validated": true,
-        "username": "plaqueboymax"
+        "username": "plaqueboymax",
+        "twitter": {
+            "handle": "plaqueboymax",
+            "url": "https://twitter.com/plaqueboymax"
+        },
+        "subreddit": "https://www.reddit.com/r/Plaqueboymax"
     },
     "CASEOH_": {
         "streamer": "CASEOH_",
         "content": "Twitch",
         "url": "https://www.twitch.tv/caseoh_",
         "validated": true,
-        "username": "caseoh_"
+        "username": "caseoh_",
+        "twitter": {
+            "handle": "caseoh_",
+            "url": "https://twitter.com/caseoh_"
+        },
+        "subreddit": "https://www.reddit.com/r/caseoh_/"
     },
     "SUMMIT1G": {
         "streamer": "SUMMIT1G",
         "content": "Twitch",
         "url": "https://www.twitch.tv/summit1g",
         "validated": true,
-        "username": "summit1g"
+        "username": "summit1g",
+        "twitter": {
+            "handle": "summit1g",
+            "url": "https://twitter.com/summit1g"
+        },
+        "subreddit": "https://www.reddit.com/r/Summit1G"
     },
     "MAXIMUM": {
         "streamer": "MAXIMUM",
         "content": "Twitch",
         "url": "https://www.twitch.tv/maximum",
         "validated": true,
-        "username": "maximum"
+        "username": "maximum",
+        "twitter": {
+            "handle": "maximum",
+            "url": "https://twitter.com/maximum"
+        },
+        "subreddit": null
     },
     "TIMTHETATMAN": {
         "streamer": "TIMTHETATMAN",
         "content": "Twitch",
         "url": "https://www.twitch.tv/timthetatman",
         "validated": true,
-        "username": "timthetatman"
+        "username": "timthetatman",
+        "twitter": {
+            "handle": "timthetatman",
+            "url": "https://twitter.com/timthetatman"
+        },
+        "subreddit": "https://www.reddit.com/r/TimTheTatMan"
     },
     "LACY": {
         "streamer": "LACY",
         "content": "Twitch",
         "url": "https://www.twitch.tv/lacy",
         "validated": true,
-        "username": "lacy"
+        "username": "lacy",
+        "twitter": {
+            "handle": "lacy",
+            "url": "https://x.com/LacyHimself"
+        },
+        "subreddit": null
     },
     "AMINEMATUE": {
         "streamer": "AMINEMATUE",
         "content": "Twitch",
         "url": "https://www.twitch.tv/aminematue",
         "validated": true,
-        "username": "aminematue"
+        "username": "aminematue",
+        "twitter": {
+            "handle": "aminematue",
+            "url": "https://twitter.com/aminematue"
+        },
+        "subreddit": "https://www.reddit.com/r/AmineMaTue"
     },
     "PIKABOOIRL": {
         "streamer": "PIKABOOIRL",
         "content": "Twitch",
         "url": "https://www.twitch.tv/pikabooirl",
         "validated": true,
-        "username": "pikabooirl"
+        "username": "pikabooirl",
+        "twitter": {
+            "handle": "pikaboowow",
+            "url": "https://x.com/pikaboowow"
+        },
+        "subreddit": null
     },
     "STABLERONALDO": {
         "streamer": "STABLERONALDO",
         "content": "Twitch",
         "url": "https://www.twitch.tv/stableronaldo",
         "validated": true,
-        "username": "stableronaldo"
+        "username": "stableronaldo",
+        "twitter": {
+            "handle": "stableronaldo",
+            "url": "https://twitter.com/stableronaldo"
+        },
+        "subreddit": "https://www.reddit.com/r/stableronaldo_"
     },
     "XQC": {
         "streamer": "XQC",
         "content": "Twitch",
         "url": "https://www.twitch.tv/xqc",
         "validated": true,
-        "username": "xqc"
+        "username": "xqc",
+        "twitter": {
+            "handle": "xQc",
+            "url": "https://twitter.com/xqc"
+        },
+        "subreddit": "https://www.reddit.com/r/xqcow/"
     },
     "TARIK": {
         "streamer": "TARIK",
         "content": "Twitch",
         "url": "https://www.twitch.tv/tarik",
         "validated": true,
-        "username": "tarik"
+        "username": "tarik",
+        "twitter": {
+            "handle": "tarik",
+            "url": "https://twitter.com/tarik"
+        },
+        "subreddit": "https://www.reddit.com/r/tarik/"
     },
     "OHNEPIXEL": {
         "streamer": "OHNEPIXEL",
         "content": "Twitch",
         "url": "https://www.twitch.tv/ohnepixel",
         "validated": true,
-        "username": "ohnepixel"
+        "username": "ohnepixel",
+        "twitter": {
+            "handle": "ohnepixel",
+            "url": "https://twitter.com/ohnepixel"
+        },
+        "subreddit": "https://www.reddit.com/r/ohnePixel/"
     },
     "JASONTHEWEEN": {
         "streamer": "JASONTHEWEEN",
         "content": "Twitch",
         "url": "https://www.twitch.tv/jasontheween",
         "validated": true,
-        "username": "jasontheween"
+        "username": "jasontheween",
+        "twitter": {
+            "handle": "jasontheween",
+            "url": "https://twitter.com/jasontheween"
+        },
+        "subreddit": "https://www.reddit.com/r/jasontheweenie/"
     },
     "YOURRAGEGAMING": {
         "streamer": "YOURRAGEGAMING",
         "content": "Twitch",
         "url": "https://www.twitch.tv/yourragegaming",
         "validated": true,
-        "username": "yourragegaming"
+        "username": "yourragegaming",
+        "twitter": {
+            "handle": "yourragegaming",
+            "url": "https://x.com/yourragez"
+        },
+        "subreddit": "https://www.reddit.com/r/YourRAGE/"
     },
     "VALKYRAE": {
         "streamer": "VALKYRAE",
         "content": "Twitch",
         "url": "https://www.twitch.tv/valkyrae",
         "validated": true,
-        "username": "valkyrae"
+        "username": "valkyrae",
+        "twitter": {
+            "handle": "valkyrae",
+            "url": "https://twitter.com/valkyrae"
+        },
+        "subreddit": "https://www.reddit.com/r/valkyrae"
     },
     "MIZKIF": {
         "streamer": "MIZKIF",
         "content": "Twitch",
         "url": "https://www.twitch.tv/mizkif",
         "validated": true,
-        "username": "mizkif"
+        "username": "mizkif",
+        "twitter": {
+            "handle": "mizkif",
+            "url": "https://twitter.com/mizkif"
+        },
+        "subreddit": "https://www.reddit.com/r/Mizkif/"
     },
     "SHROUD": {
         "streamer": "SHROUD",
         "content": "Twitch",
         "url": "https://www.twitch.tv/shroud",
         "validated": true,
-        "username": "shroud"
+        "username": "shroud",
+        "twitter": {
+            "handle": "shroud",
+            "url": "https://twitter.com/shroud"
+        },
+        "subreddit": "https://www.reddit.com/r/Shroud"
     },
     "LIRIK": {
         "streamer": "LIRIK",
         "content": "Twitch",
         "url": "https://www.twitch.tv/lirik",
         "validated": true,
-        "username": "lirik"
+        "username": "lirik",
+        "twitter": {
+            "handle": "lirik",
+            "url": "https://twitter.com/lirik"
+        },
+        "subreddit": "https://www.reddit.com/r/DatGuyLirik"
     },
     "THEBAUSFFS": {
         "streamer": "THEBAUSFFS",
         "content": "Twitch",
         "url": "https://www.twitch.tv/thebausffs",
         "validated": true,
-        "username": "thebausffs"
+        "username": "thebausffs",
+        "twitter": null,
+        "subreddit": "https://www.reddit.com/r/Thebausffs"
     },
     "GRUBBY": {
         "streamer": "GRUBBY",
         "content": "Twitch",
         "url": "https://www.twitch.tv/grubby",
         "validated": true,
-        "username": "grubby"
+        "username": "grubby",
+        "twitter": null,
+        "subreddit": "https://www.reddit.com/r/Grubby"
     },
     "EMIRU": {
         "streamer": "EMIRU",
         "content": "Twitch",
         "url": "https://www.twitch.tv/emiru",
         "validated": true,
-        "username": "emiru"
+        "username": "emiru",
+        "twitter": null,
+        "subreddit": "https://www.reddit.com/r/emiru"
     },
     "GORGC": {
         "streamer": "GORGC",
         "content": "Twitch",
         "url": "https://www.twitch.tv/gorgc",
         "validated": true,
-        "username": "gorgc"
+        "username": "gorgc",
+        "twitter": null,
+        "subreddit": "https://www.reddit.com/r/gorgc"
     },
     "MOONMOON": {
         "streamer": "MOONMOON",
         "content": "Twitch",
         "url": "https://www.twitch.tv/moonmoon",
         "validated": true,
-        "username": "moonmoon"
+        "username": "moonmoon",
+        "subreddit": null,
+        "twitter": null
     },
     "LOLTYLER1": {
         "streamer": "LOLTYLER1",
         "content": "Twitch",
         "url": "https://www.twitch.tv/loltyler1",
         "validated": true,
-        "username": "loltyler1"
+        "username": "loltyler1",
+        "subreddit": null,
+        "twitter": null
     },
     "NECROS": {
         "streamer": "NECROS",
         "content": "Twitch",
         "url": "https://www.twitch.tv/necros",
         "validated": true,
-        "username": "necros"
+        "username": "necros",
+        "subreddit": null,
+        "twitter": null
     },
     "ADAPT": {
         "streamer": "ADAPT",
         "content": "Twitch",
         "url": "https://www.twitch.tv/adapt",
         "validated": true,
-        "username": "adapt"
+        "username": "adapt",
+        "subreddit": null,
+        "twitter": null
     },
     "QUIN69": {
         "streamer": "QUIN69",
         "content": "Twitch",
         "url": "https://www.twitch.tv/quin69",
         "validated": true,
-        "username": "quin69"
+        "username": "quin69",
+        "subreddit": null
     },
     "CLIX": {
         "streamer": "CLIX",
