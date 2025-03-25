@@ -48,76 +48,86 @@
                 }
             });
         });
-
         function streamerCardTemplate(streamerData) {
             // Create the Twitch profile section if available
             let twitchSection = "";
             if (streamerData.twitch_info) {
                 // Make sure we have a username, use the streamer name as fallback
                 const username = streamerData.twitch_info.username || streamerData.name;
-
                 // Debug logging to check what data is available
                 console.log("Streamer data:", streamerData);
                 console.log("Twitch info:", streamerData.twitch_info);
-                
                 // Check if the image path is valid, use a placeholder if not
                 const imagePath = streamerData.image_path || "images/placeholder.jpg";
-                
+
+                // Get bio from CSV data if available
+                const bioText = streamerData.csv_data && streamerData.csv_data.Description ?
+                    streamerData.csv_data.Description :
+                    "";
+
                 twitchSection = `
-                    <div class="twitch-profile">
-                        <div class="streamer-header">
-                            <img src="/static/${imagePath}" 
-                                alt="${streamerData.name}" 
-                                class="streamer-image"
-                                onerror="this.src='/static/images/placeholder.jpg'" />
-                            <div class="streamer-info">
-                                <h3>${streamerData.name}</h3>
-                                <a href="${streamerData.twitch_info.url}" 
-                                target="_blank" 
-                                class="twitch-link">
-                                    <img src="/static/images/logo.png" 
-                                        alt="Twitch" 
-                                        class="twitch-icon" />
-                                    Visit ${username}'s Twitch Channel
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                `;
+      <div class="twitch-profile">
+        <div class="streamer-header">
+          <img src="/static/${imagePath}"
+            alt="${streamerData.name}"
+            class="streamer-image"
+            onerror="this.src='/static/images/placeholder.jpg'" />
+          <div class="streamer-info">
+            <h3>${streamerData.name}</h3>
+            ${bioText ? `<p class="bio-text">${bioText}</p>` : ''}
+            <a href="${streamerData.twitch_info.url}"
+              target="_blank"
+              class="twitch-link">
+              <img src="/static/images/logo.png"
+                alt="Twitch"
+                class="twitch-icon" />
+              Visit ${username}'s Twitch Channel
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
             } else {
+                // Similar modification for the case with no Twitch info
+                const bioText = streamerData.csv_data && streamerData.csv_data.Description ?
+                    streamerData.csv_data.Description :
+                    "";
+
                 twitchSection = `
-                    <div class="twitch-profile">
-                        <div class="streamer-header">
-                            <img src="/static/images/placeholder.jpg" 
-                                alt="${streamerData.name}" 
-                                class="streamer-image" />
-                            <div class="streamer-info">
-                                <h3>${streamerData.name}</h3>
-                                <p>No Twitch information available</p>
-                            </div>
-                        </div>
-                    </div>
-                `;
+      <div class="twitch-profile">
+        <div class="streamer-header">
+          <img src="/static/images/placeholder.jpg"
+            alt="${streamerData.name}"
+            class="streamer-image" />
+          <div class="streamer-info">
+            <h3>${streamerData.name}</h3>
+            ${bioText ? `<p class="bio-text">${bioText}</p>` : ''}
+            <p>No Twitch information available</p>
+          </div>
+        </div>
+      </div>
+    `;
             }
 
             // Create documents section
             let documentsHtml = "";
             if (streamerData.documents && streamerData.documents.length > 0) {
                 documentsHtml = `
-                    <div class="document-list">
-                        <h4>Related Content</h4>
-                        ${streamerData.documents.map(doc => documentTemplate(doc)).join('')}
-                    </div>
-                `;
+      <div class="document-list">
+        <h4>Related Content</h4>
+        ${streamerData.documents.map(doc => documentTemplate(doc)).join('')}
+      </div>
+    `;
             }
 
             return `
-                <div class="streamer-card">
-                    ${twitchSection}
-                    ${documentsHtml}
-                </div>
-            `;
+    <div class="streamer-card">
+      ${twitchSection}
+      ${documentsHtml}
+    </div>
+  `;
         }
+
 
         function documentTemplate(doc) {
             return `
@@ -512,6 +522,16 @@
 
         .document-item[data-source="reddit"] {
             border-left-color: #ff4500;
+        }
+
+        .bio-text {
+            margin: 8px 0 12px 0;
+            color: var(--text-color);
+            font-size: 0.95em;
+            line-height: 1.5;
+            max-width: 500px;
+            border-left: 4px solid var(--accent-color);
+            padding-left: 10px;
         }
     </style>
 </body>
