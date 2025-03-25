@@ -119,7 +119,7 @@
         }
 
         function filterText() {
-            document.getElementById("answer-box").innerHTML = ""
+            document.getElementById("answer-box").innerHTML = "";
             const searchTerm = document.getElementById("filter-text-val").value;
 
             if (searchTerm.trim() === "") return;
@@ -392,7 +392,7 @@
             border-left: 4px solid #cc0000;
         }
 
-        /* Theme toggle styles */
+        /* Theme toggle container */
         .theme-toggle {
             position: absolute;
             top: -15px;
@@ -413,12 +413,14 @@
             color: var(--text-color);
         }
 
-        /* Toggle switch */
+        /* Larger toggle switch */
         .switch {
             position: relative;
             display: inline-block;
-            width: 50px;
-            height: 24px;
+            width: 60px;
+            /* Increase width */
+            height: 34px;
+            /* Increase height */
         }
 
         .switch input {
@@ -435,7 +437,9 @@
             right: 0;
             bottom: 0;
             background-color: #ccc;
-            transition: .4s;
+            transition: 0.4s;
+            border-radius: 34px;
+            /* match or exceed height for a fully rounded slider */
         }
 
         .slider:before {
@@ -444,13 +448,17 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            height: 16px;
-            width: 16px;
+            height: 26px;
+            /* slightly less than .switch height */
+            width: 26px;
+            /* slightly less than .switch width */
             left: 4px;
             bottom: 4px;
             background-color: white;
-            transition: .4s;
-            font-size: 10px;
+            transition: 0.4s;
+            font-size: 14px;
+            /* controls the sun icon size */
+            border-radius: 50%;
         }
 
         input:checked+.slider {
@@ -464,8 +472,8 @@
         input:checked+.slider:before {
             transform: translateX(26px);
             content: "🌙";
-            font-size: 12px;
-            /* Increased moon size */
+            font-size: 16px;
+            /* moon icon size when checked */
         }
 
         .slider.round {
