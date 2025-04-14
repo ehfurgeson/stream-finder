@@ -1,3 +1,9 @@
+import subprocess
+
+# Launch the check_live Flask app in a separate process (non-blocking).
+subprocess.Popen(["python", "check_live.py"])
+
+
 import json
 import os
 from flask import Flask, render_template, request, jsonify
