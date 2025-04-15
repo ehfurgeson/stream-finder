@@ -83,7 +83,7 @@ class TFIDFSVDSearch:
         print(f"Preprocessed {len(self.documents)} documents for TF-IDF and SVD")
     
     def fit(self):
-        """Fit the TF-IDF model and perform SVD"""
+        """Fit the TF-IDF model and perform SVD with GPU acceleration if available"""
         print("Fitting TF-IDF vectorizer...")
         start_time = time.time()
         td_matrix = self.vectorizer.fit_transform(self.documents)
@@ -94,11 +94,37 @@ class TFIDFSVDSearch:
         
         print(f"Performing SVD with {self.n_components} components...")
         start_time = time.time()
-        # SVD: td_matrix ≈ U @ Sigma @ V^T
-        self.u, self.s, self.vt = svds(td_matrix, k=self.n_components)
-        print(f"SVD completed in {time.time() - start_time:.2f} seconds")
         
-        # Sort the SVD components by singular values (important for optimal truncation)
+        # Use PyTorch for GPU-accelerated SVD
+        try:
+            import torch
+            
+            # Check if CUDA is available
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            print(f"Using device: {device}")
+            
+            # Convert scipy sparse matrix to PyTorch tensor
+            dense_matrix = td_matrix.toarray()
+            torch_matrix = torch.tensor(dense_matrix, dtype=torch.float32).to(device)
+            
+            # Perform SVD using PyTorch
+            u, s, vt = torch.linalg.svd(torch_matrix, full_matrices=False)
+            
+            # Keep only the top k components
+            u = u[:, :self.n_components].cpu().numpy()
+            s = s[:self.n_components].cpu().numpy()
+            vt = vt[:self.n_components, :].cpu().numpy()
+            
+            self.u, self.s, self.vt = u, s, vt
+            print(f"GPU-accelerated SVD completed in {time.time() - start_time:.2f} seconds")
+            
+        except (ImportError, RuntimeError):
+            # Fall back to CPU implementation if PyTorch is not available or CUDA failed
+            print("Falling back to CPU implementation for SVD")
+            self.u, self.s, self.vt = svds(td_matrix, k=self.n_components)
+            print(f"CPU SVD completed in {time.time() - start_time:.2f} seconds")
+        
+        # Sort the SVD components by singular values
         idx = np.argsort(-self.s)
         self.s = self.s[idx]
         self.u = self.u[:, idx]
