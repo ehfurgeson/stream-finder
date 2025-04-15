@@ -110,9 +110,24 @@
         }
 
         function documentTemplate(doc) {
+            // Generate dimension tags if available
+            let dimensionTags = "";
+            if (doc.top_dimensions && doc.top_dimensions.length > 0) {
+                dimensionTags = `
+                    <div class="dimension-tags">
+                        ${doc.top_dimensions.map(dim => 
+                            `<span class="dimension-tag" title="Relevance dimension">
+                                ${dim.label}
+                             </span>`
+                        ).join('')}
+                    </div>
+                `;
+            }
+
             return `
-                <div class="document-item">
+                <div class="document-item" data-source="${doc.source}">
                     <p class="doc">${doc.doc}</p>
+                    ${dimensionTags}
                     <div class="meta-info">
                         <span class="source">Source: ${doc.source}</span>
                         <span class="sim-score">Score: ${doc.final_score}</span>
@@ -196,6 +211,8 @@
             --card-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
             --input-bg: white;
             --document-bg: #f9f9f9;
+            --tag-bg: rgba(100, 65, 165, 0.1);
+            --tag-color: #6441a5;
         }
 
         /* Dark theme variables */
@@ -211,6 +228,8 @@
             --card-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
             --input-bg: #333;
             --document-bg: #2c2c2c;
+            --tag-bg: rgba(145, 71, 255, 0.2);
+            --tag-color: #b47eff;
         }
 
         body {
@@ -404,6 +423,32 @@
             font-size: 14px;
             line-height: 1.5;
             color: var(--text-color);
+        }
+
+        /* Dimension tags styling */
+        .dimension-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .dimension-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background-color: var(--tag-bg);
+            color: var(--tag-color);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: help;
+            transition: all 0.2s ease;
+        }
+
+        .dimension-tag:hover {
+            background-color: var(--accent-color);
+            color: white;
+            transform: scale(1.05);
         }
 
         .meta-info {
