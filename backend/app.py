@@ -250,8 +250,8 @@ if os.path.exists(models_dir) and os.path.isfile(os.path.join(models_dir, "vecto
 else:
     print("Pre-computed models not found. Please run preprocess_data.py first.")
     print("Falling back to in-memory computation (slower startup)...")
-    from tfidf_svd_search import TFIDFSVDSearch
-    search_engine = TFIDFSVDSearch(n_components=100)
+    from preprocess_data import TFIDFSVDSearch
+    search_engine = TFIDFSVDSearch(n_components=30)
     search_engine.preprocess_documents(reddit_data, twitter_data, wiki_data, details_data)
     search_engine.fit()
 
