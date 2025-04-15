@@ -1,3 +1,13 @@
+# Add this at the beginning of your script to diagnose CUDA issues
+import torch
+print(f"PyTorch version: {torch.__version__}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"CUDA version: {torch.version.cuda}")
+    print(f"Device: {torch.cuda.get_device_name(0)}")
+else:
+    print("CUDA not available. Check your installation.")
+
 import json
 import os
 import pickle
@@ -20,11 +30,11 @@ os.makedirs(models_dir, exist_ok=True)
 
 # TF-IDF SVD Search class (similar to the one in app.py but optimized for preprocessing)
 class TFIDFSVDSearch:
-    def __init__(self, n_components=300):
+    def __init__(self, n_components= 30):
         self.n_components = n_components
         self.vectorizer = TfidfVectorizer(
             stop_words="english",
-            min_df=1,       # Include all terms, even rare ones
+            min_df=2,       # Include all terms, even rare ones
             max_df=0.5,     # Filter out very common terms
             ngram_range=(1, 2)  # Include both unigrams and bigrams
         )
@@ -95,32 +105,48 @@ class TFIDFSVDSearch:
         print(f"Performing SVD with {self.n_components} components...")
         start_time = time.time()
         
-        # Use PyTorch for GPU-accelerated SVD
         try:
             import torch
+            import cupy as cp
+            if torch.cuda.is_available():
+                print("Using GPU acceleration with CuPy")
+                # Convert scipy sparse matrix to cupy sparse matrix
+                import cupyx.scipy.sparse as cp_sparse
+                from cupyx.scipy.sparse.linalg import svds as cp_svds
+                
+                # Convert to CSR format if not already
+                if not isinstance(td_matrix, cp_sparse.csr_matrix):
+                    if hasattr(td_matrix, "tocsr"):
+                        td_matrix = td_matrix.tocsr()
+                
+                # Move data to GPU
+                data_gpu = cp.array(td_matrix.data)
+                indices_gpu = cp.array(td_matrix.indices)
+                indptr_gpu = cp.array(td_matrix.indptr)
+                
+                # Create sparse matrix on GPU
+                td_matrix_gpu = cp_sparse.csr_matrix(
+                    (data_gpu, indices_gpu, indptr_gpu),
+                    shape=td_matrix.shape
+                )
+                
+                # Perform SVD on GPU
+                u_gpu, s_gpu, vt_gpu = cp_svds(td_matrix_gpu, k=self.n_components)
+                
+                # Move results back to CPU
+                self.u = cp.asnumpy(u_gpu)
+                self.s = cp.asnumpy(s_gpu)
+                self.vt = cp.asnumpy(vt_gpu)
+                
+                print(f"GPU-accelerated SVD completed in {time.time() - start_time:.2f} seconds")
+            else:
+                raise ImportError("CUDA is not available")
+        except ImportError as e:
+            print(f"GPU acceleration not available: {e}")
+            print("Falling back to CPU implementation")
             
-            # Check if CUDA is available
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            print(f"Using device: {device}")
-            
-            # Convert scipy sparse matrix to PyTorch tensor
-            dense_matrix = td_matrix.toarray()
-            torch_matrix = torch.tensor(dense_matrix, dtype=torch.float32).to(device)
-            
-            # Perform SVD using PyTorch
-            u, s, vt = torch.linalg.svd(torch_matrix, full_matrices=False)
-            
-            # Keep only the top k components
-            u = u[:, :self.n_components].cpu().numpy()
-            s = s[:self.n_components].cpu().numpy()
-            vt = vt[:self.n_components, :].cpu().numpy()
-            
-            self.u, self.s, self.vt = u, s, vt
-            print(f"GPU-accelerated SVD completed in {time.time() - start_time:.2f} seconds")
-            
-        except (ImportError, RuntimeError):
-            # Fall back to CPU implementation if PyTorch is not available or CUDA failed
-            print("Falling back to CPU implementation for SVD")
+            # Use scipy's sparse SVD
+            from scipy.sparse.linalg import svds
             self.u, self.s, self.vt = svds(td_matrix, k=self.n_components)
             print(f"CPU SVD completed in {time.time() - start_time:.2f} seconds")
         
@@ -222,7 +248,7 @@ def main():
     
     # Initialize and train the model
     print("\nInitializing TF-IDF SVD model...")
-    search_engine = TFIDFSVDSearch(n_components=300)
+    search_engine = TFIDFSVDSearch(n_components=30)
     
     # Preprocess documents
     search_engine.preprocess_documents(reddit_data, twitter_data, wiki_data, details_data)
