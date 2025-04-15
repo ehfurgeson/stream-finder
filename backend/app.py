@@ -1,11 +1,7 @@
-"""
-Hybrid Search combining Boolean search and BERT semantic search
-This implementation combines the strengths of both approaches:
-1. Boolean search for precise keyword matching
-2. BERT semantic search for understanding meaning
-"""
-
-import os, json, pickle, sys
+import os
+import json
+import pickle
+import sys
 import numpy as np
 import re
 from sentence_transformers import SentenceTransformer
@@ -13,613 +9,612 @@ import faiss
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import pandas as pd
-import torch
 from collections import defaultdict
+import gc
+import math # Import math for isnan/isinf checks
 
 # ───────────────────────────────────────────────────────────────────────────────
-# ⬇️ CONFIG
-# -----------------------------------------------------------------------------
-MODEL_NAME   = "sentence-transformers/all-mpnet-base-v2"   # 768-dim embeddings
-EMBED_PATH   = "embeddings.npy"
+# CONFIG
+# ───────────────────────────────────────────────────────────────────────────────
+MODEL_NAME   = "sentence-transformers/all-MiniLM-L6-v2"
 META_PATH    = "metadata.pkl"
-BUILD_INDEX  = False                # set True for initial build, then flip to False
-TOP_K        = 50                   # Number of results to retrieve for BERT
-EMBED_DIM    = 768                  # Embedding dimension
-SEMANTIC_WEIGHT = 0.5               # Weight for semantic results (0.0-1.0)
-BOOLEAN_WEIGHT = 0.5                # Weight for boolean results (0.0-1.0)
+BOOLEAN_INDEX_PATH = "boolean_index.pkl"
+
+# --- Float16 Configuration ---
+EMBED_PATH_FP16 = "embeddings_fp16.npy" # Preferred path
+EMBED_PATH_FP32_FALLBACK = "embeddings.npy" # Fallback path (will check dtype)
+EXPECTED_EMBED_DTYPE = np.float16
+
+BUILD_INDEX_ON_MISSING = True
+TOP_K        = 20 # Adjusted from 25 based on previous code
+EMBED_DIM    = 768 # Will be verified
+SEMANTIC_WEIGHT = 0.5
+BOOLEAN_WEIGHT = 0.5
 
 # ───────────────────────────────────────────────────────────────────────────────
-# ⬇️ DATA LOADING
-# -----------------------------------------------------------------------------
+# DATA LOADING (As before)
+# ───────────────────────────────────────────────────────────────────────────────
 BACK = os.path.dirname(os.path.abspath(__file__))
+try:
+    with open(os.path.join(BACK, "init.json"), "r", encoding="utf-8") as f: init = json.load(f)
+    reddit_data, twitter_data, wiki_data, details_data = init.get("reddit",{}), init.get("twitter",{}), init.get("wiki",{}), init.get("details",{})
+except FileNotFoundError: print(f"Error: init.json not found in {BACK}. Exiting."); sys.exit(1)
+except Exception as e: print(f"Error loading init.json: {e}. Exiting."); sys.exit(1)
 
-with open(os.path.join(BACK, "init.json"), "r", encoding="utf-8") as f:
-    init = json.load(f)
-reddit_data  = init["reddit"]
-twitter_data = init["twitter"]
-wiki_data    = init["wiki"]
-details_data = init["details"]
-
-# CSV with extra streamer details
+streamer_csv_data = {}
 CSV_PATH = os.path.join(BACK, "streamer_details.csv")
-streamer_csv = pd.read_csv(CSV_PATH).fillna("")
-streamer_csv_data = {str(r["Name"]).upper().strip(): dict(r) for _, r in streamer_csv.iterrows()}
+if os.path.exists(CSV_PATH):
+    try:
+        streamer_csv = pd.read_csv(CSV_PATH).fillna("")
+        streamer_csv_data = {str(r["Name"]).upper().strip(): dict(r) for _, r in streamer_csv.iterrows()}
+    except Exception as e: print(f"Warning: Could not load/parse {CSV_PATH}: {e}")
+else: print(f"Info: {CSV_PATH} not found.")
 
 # ───────────────────────────────────────────────────────────────────────────────
-# ⬇️ BOOLEAN SEARCH FUNCTIONS
-# -----------------------------------------------------------------------------
+# BOOLEAN SEARCH FUNCTIONS (As before)
+# ───────────────────────────────────────────────────────────────────────────────
 def create_boolean_index():
-    """Create an inverted index for boolean search"""
-    print("Creating boolean index...")
+    # (Function content remains the same as previous minimal version)
     index = defaultdict(list)
-    
-    # Index Reddit posts (titles)
-    for streamer, data in reddit_data.items():
-        for i, post in enumerate(data):
-            title = post["Title"].lower()
-            words = re.findall(r"\w+", title)
-            for word in words:
-                index[word].append(("reddit", streamer, i))
-    
-    # Index Twitter posts (full text)
-    for streamer, tweets in twitter_data.items():
-        for i, tweet in enumerate(tweets):
-            tweet_text = tweet.lower()
-            words = re.findall(r"\w+", tweet_text)
-            for word in words:
-                index[word].append(("twitter", streamer, i))
-    
-    # Index Wiki summaries
-    if isinstance(wiki_data, dict):
+    for streamer, data in reddit_data.items(): # Reddit
+        if isinstance(data, list): # Added check
+            for i, post in enumerate(data):
+                if isinstance(post, dict): # Added check
+                     words = re.findall(r"\w+", post.get("Title", "").lower())
+                     for w in words: index[w].append(("reddit", streamer, i))
+    for streamer, tweets in twitter_data.items(): # Twitter
+        if isinstance(tweets, list): # Added check
+            for i, tweet in enumerate(tweets):
+                words = re.findall(r"\w+", str(tweet).lower())
+                for w in words: index[w].append(("twitter", streamer, i))
+    wiki_idx_counter = 0 # Defined for list case
+    if isinstance(wiki_data, dict): # Wiki (dict format)
         for streamer, entry in wiki_data.items():
             if isinstance(entry, dict) and "wikipedia_summary" in entry:
-                summary = entry["wikipedia_summary"].lower()
-                words = re.findall(r"\w+", summary)
-                for word in words:
-                    index[word].append(("wiki", streamer, 0))
-    elif isinstance(wiki_data, list):
-        for i, entry in enumerate(wiki_data):
+                words = re.findall(r"\w+", entry["wikipedia_summary"].lower())
+                for w in words: index[w].append(("wiki", streamer, 0)) # Use 0 for dict case idx
+    elif isinstance(wiki_data, list): # Wiki (list format)
+        for i, entry in enumerate(wiki_data): # Iterate with index i
             if isinstance(entry, dict) and "wikipedia_summary" in entry and "streamer" in entry:
-                summary = entry["wikipedia_summary"].lower()
-                words = re.findall(r"\w+", summary)
-                for word in words:
-                    index[word].append(("wiki", entry["streamer"], i))
-    
-    # Index Details descriptions
-    for streamer, details in details_data.items():
-        description = str(details.get("Description", "")).lower()
-        words = re.findall(r"\w+", description)
-        for word in words:
-            index[word].append(("details", streamer, 0))
-    
-    print(f"Boolean index created with {len(index)} unique words")
+                sn = entry["streamer"]
+                words = re.findall(r"\w+", entry["wikipedia_summary"].lower())
+                index[w].append(("wiki", sn, i)) # Use actual list index i
+                # wiki_idx_counter += 1 # Not needed if using i
+    for streamer, details in details_data.items(): # Details
+        if isinstance(details, dict): # Added check
+            words = re.findall(r"\w+", str(details.get("Description", "")).lower())
+            for w in words: index[w].append(("details", streamer, 0)) # Use 0 for details idx
     return index
 
+
 def boolean_search(query, index):
-    """Perform boolean search using the inverted index"""
-    query = query.strip().lower()
-    terms = re.findall(r"\w+", query)
-    
-    if not terms:
-        return []
-    
-    # For each term, find matching documents
-    doc_matches = defaultdict(int)
-    doc_info = {}
-    
+    # (Function content remains the same as previous minimal version)
+    terms = re.findall(r"\w+", query.strip().lower());
+    if not terms: return []
+    doc_matches, doc_info = defaultdict(int), {}
     for term in terms:
         if term in index:
-            for doc in index[term]:
-                source, streamer, idx = doc
-                doc_id = f"{source}:{streamer}:{idx}"
-                doc_matches[doc_id] += 1
-                
+            for doc_ref in index[term]:
+                source, streamer, idx = doc_ref; doc_id = f"{source}:{streamer}:{idx}"; doc_matches[doc_id] += 1
                 if doc_id not in doc_info:
-                    if source == "reddit":
-                        doc_info[doc_id] = {
-                            "source": "reddit",
-                            "streamer": streamer,
-                            "data": reddit_data[streamer][idx],
-                            "text": reddit_data[streamer][idx]["Title"],
-                            "score": reddit_data[streamer][idx]["Score"],
-                            "idx": idx,
-                            "term_matches": 0
-                        }
-                    elif source == "twitter":
-                        doc_info[doc_id] = {
-                            "source": "twitter",
-                            "streamer": streamer,
-                            "data": twitter_data[streamer][idx],
-                            "text": twitter_data[streamer][idx],
-                            "score": 1,
-                            "idx": idx,
-                            "term_matches": 0
-                        }
-                    elif source == "wiki":
-                        wiki_entry = None
-                        wiki_text = ""
-                        if isinstance(wiki_data, dict) and streamer in wiki_data:
-                            wiki_entry = wiki_data[streamer]
-                            if isinstance(wiki_entry, dict) and "wikipedia_summary" in wiki_entry:
-                                wiki_text = wiki_entry["wikipedia_summary"]
-                        elif isinstance(wiki_data, list) and 0 <= idx < len(wiki_data):
-                            wiki_entry = wiki_data[idx]
-                            if isinstance(wiki_entry, dict) and "wikipedia_summary" in wiki_entry:
-                                wiki_text = wiki_entry["wikipedia_summary"]
-                        
-                        doc_info[doc_id] = {
-                            "source": "wiki",
-                            "streamer": streamer,
-                            "data": wiki_entry,
-                            "text": wiki_text,
-                            "score": 2,
-                            "idx": idx,
-                            "term_matches": 0
-                        }
-                    elif source == "details":
-                        detail_entry = details_data.get(streamer, {})
-                        description = detail_entry.get("Description", "")
-                        doc_info[doc_id] = {
-                            "source": "details",
-                            "streamer": streamer,
-                            "data": detail_entry,
-                            "text": description,
-                            "score": 3,
-                            "idx": idx,
-                            "term_matches": 0
-                        }
-    
-    # Record term match counts
-    for doc_id, match_count in doc_matches.items():
-        doc_info[doc_id]["term_matches"] = match_count
-    
-    # Convert to list
-    results = []
-    for doc_id, doc in doc_info.items():
-        results.append(doc)
-    
-    return results
+                    doc_entry, text, score = None, "", 1
+                    try:
+                        # Added more specific checks for data types and existence
+                        if source == "reddit" and streamer in reddit_data and isinstance(reddit_data[streamer], list) and idx < len(reddit_data[streamer]):
+                             entry = reddit_data[streamer][idx]
+                             if isinstance(entry, dict):
+                                 doc_entry, text, score = entry, entry.get("Title", ""), entry.get("Score", 1)
+                        elif source == "twitter" and streamer in twitter_data and isinstance(twitter_data[streamer], list) and idx < len(twitter_data[streamer]):
+                             doc_entry, text = twitter_data[streamer][idx], str(twitter_data[streamer][idx])
+                        elif source == "wiki":
+                             we = None
+                             if isinstance(wiki_data, dict) and streamer in wiki_data and isinstance(wiki_data[streamer], dict):
+                                 we = wiki_data[streamer]
+                             elif isinstance(wiki_data, list) and 0 <= idx < len(wiki_data) and isinstance(wiki_data[idx], dict) and wiki_data[idx].get("streamer") == streamer:
+                                 we = wiki_data[idx]
+
+                             if we and "wikipedia_summary" in we:
+                                 doc_entry, text, score = we, we["wikipedia_summary"], 2
+                        elif source == "details" and streamer in details_data and isinstance(details_data[streamer], dict):
+                             doc_entry, text, score = details_data[streamer], str(details_data[streamer].get("Description", "")), 3
+
+                        if text: # Ensure text was actually found
+                             doc_info[doc_id] = {"source": source, "streamer": streamer, "data": doc_entry, "text": text, "score": score, "idx": idx, "term_matches": 0}
+                    except (KeyError, IndexError, TypeError) as e: print(f"Warning: Bool access {doc_id}: {e}"); continue
+    for doc_id, count in doc_matches.items():
+         if doc_id in doc_info: doc_info[doc_id]["term_matches"] = count
+    return list(doc_info.values())
 
 def score_boolean_results(results, query):
-    """Score boolean search results based on term matches and source"""
-    query_terms = set(re.findall(r"\w+", query.lower()))
-    scored_results = []
-    
+    # (Function content remains the same as previous minimal version)
+    qt = set(re.findall(r"\w+", query.lower())); scored = []
     for doc in results:
-        score = 0
-        text = doc["text"].lower()
-        
-        # Term matches score
-        term_match_score = doc.get("term_matches", 0) * 15
-        score += term_match_score
-        
-        # Term frequency score
-        for term in query_terms:
-            count = text.count(term.lower())
-            score += count * 5
-        
-        # Source-based weighting
-        if doc["source"] == "reddit":
-            reddit_score_boost = min(doc["score"] / 500, 20)
-            score += reddit_score_boost
-        elif doc["source"] == "wiki":
-            score += 15
-        elif doc["source"] == "details":
-            score += 10
-        
-        # Exact phrase match bonus
-        if " ".join(query_terms) in text:
-            score += 50
-        
-        # Format the document for output
-        formatted_doc = {
-            "source": doc["source"],
-            "name": doc["streamer"],
-            "doc": doc["text"][:150] + "..." if len(doc["text"]) > 150 else doc["text"],
-            "boolean_score": round(score, 2),
-            "term_matches": doc.get("term_matches", 0)
-        }
-        
-        # Add Reddit-specific fields if applicable
-        if doc["source"] == "reddit" and isinstance(doc["data"], dict):
-            formatted_doc["reddit_score"] = doc["score"]
-            formatted_doc["id"] = doc["data"].get("ID", "")
-            
-        scored_results.append((formatted_doc, score))
-    
-    # Sort by score
-    scored_results.sort(key=lambda x: x[1], reverse=True)
-    return [doc for doc, _ in scored_results]
+        # Added check if doc is a dictionary
+        if not isinstance(doc, dict): continue
+        score = doc.get("term_matches", 0) * 15; text = doc.get("text", "").lower() # Added default empty string
+        score += sum(text.count(term) * 5 for term in qt)
+        ss = doc.get("score", 1)
+        # Added check for numeric score before division
+        if doc["source"] == "reddit" and isinstance(ss, (int, float)): score += min(ss / 500.0, 20) if ss > 0 else 0
+        elif doc["source"] == "wiki": score += 15
+        elif doc["source"] == "details": score += 10
+        if query.lower() in text: score += 50
+        fmt = {"source": doc["source"], "name": doc["streamer"], "doc": text[:150] + ("..." if len(text) > 150 else ""), "boolean_score": round(score, 2), "term_matches": doc.get("term_matches", 0)}
+        if doc["source"] == "reddit" and isinstance(doc.get("data"), dict): fmt["reddit_score"], fmt["id"] = ss, doc["data"].get("ID", "")
+        scored.append((fmt, score))
+    scored.sort(key=lambda x: x[1], reverse=True); return [d for d, _ in scored]
 
 # ───────────────────────────────────────────────────────────────────────────────
-# ⬇️ BERT SEMANTIC SEARCH FUNCTIONS
-# -----------------------------------------------------------------------------
+# SEMANTIC SEARCH FUNCTIONS
+# ───────────────────────────────────────────────────────────────────────────────
 def gather_documents():
-    """Gather documents for BERT embeddings"""
+    # (Function content remains the same as previous minimal version)
     docs = []
-    
-    # Reddit posts
-    for streamer, posts in reddit_data.items():
-        for idx, post in enumerate(posts):
-            docs.append({
-                "text": post["Title"], 
-                "source": "reddit", 
-                "streamer": streamer, 
-                "idx": idx, 
-                "data": post,
-                "score": post.get("Score", 1)
-            })
-    
-    # Twitter posts
-    for streamer, tweets in twitter_data.items():
-        for idx, tweet in enumerate(tweets):
-            docs.append({
-                "text": tweet, 
-                "source": "twitter", 
-                "streamer": streamer, 
-                "idx": idx, 
-                "data": tweet,
-                "score": 1
-            })
-    
-    # Wiki entries
-    if isinstance(wiki_data, dict):
+    for streamer, posts in reddit_data.items(): # Reddit
+        if isinstance(posts, list): # Added check
+            for idx, post in enumerate(posts):
+                 if isinstance(post, dict) and "Title" in post: docs.append({"text": post["Title"], "source": "reddit", "streamer": streamer, "idx": idx, "data": post, "score": post.get("Score", 1)})
+    for streamer, tweets in twitter_data.items(): # Twitter
+        if isinstance(tweets, list): # Added check
+            for idx, tweet in enumerate(tweets):
+                 if isinstance(tweet, str): docs.append({"text": tweet, "source": "twitter", "streamer": streamer, "idx": idx, "data": tweet, "score": 1})
+    wiki_idx_counter = 0
+    if isinstance(wiki_data, dict): # Wiki (dict)
         for streamer, entry in wiki_data.items():
-            if isinstance(entry, dict) and "wikipedia_summary" in entry:
-                # Add streamer name to wiki text to improve matching
-                wiki_text = f"{entry['wikipedia_summary']} {streamer}"
-                docs.append({
-                    "text": wiki_text, 
-                    "source": "wiki", 
-                    "streamer": streamer, 
-                    "idx": 0, 
-                    "data": entry,
-                    "score": 2
-                })
-    else:
-        for idx, entry in enumerate(wiki_data):
-            if isinstance(entry, dict) and "wikipedia_summary" in entry:
-                streamer_name = entry.get("streamer", "")
-                # Add streamer name to wiki text to improve matching
-                wiki_text = f"{entry['wikipedia_summary']} {streamer_name}"
-                docs.append({
-                    "text": wiki_text, 
-                    "source": "wiki", 
-                    "streamer": streamer_name, 
-                    "idx": idx, 
-                    "data": entry,
-                    "score": 2
-                })
-    
-    # Details descriptions
-    for streamer, det in details_data.items():
-        # Add streamer name to details text to improve matching
-        description = f"{str(det.get('Description', ''))} {streamer}"
-        docs.append({
-            "text": description, 
-            "source": "details", 
-            "streamer": streamer, 
-            "idx": 0, 
-            "data": det,
-            "score": 3
-        })
-    
-    print(f"Gathered {len(docs)} documents for BERT indexing")
+            if isinstance(entry, dict) and "wikipedia_summary" in entry: docs.append({"text": entry['wikipedia_summary'], "source": "wiki", "streamer": streamer, "idx": 0, "data": entry, "score": 2}) # Removed adding streamer name to text
+    elif isinstance(wiki_data, list): # Wiki (list)
+         for i, entry in enumerate(wiki_data): # Use i
+             if isinstance(entry, dict) and "wikipedia_summary" in entry and "streamer" in entry:
+                 sn=entry["streamer"]
+                 docs.append({"text": entry['wikipedia_summary'], "source": "wiki", "streamer": sn, "idx": i, "data": entry, "score": 2}) # Use i, Removed adding streamer name
+                 # wiki_idx_counter += 1 # Not needed
+    for streamer, det in details_data.items(): # Details
+         if isinstance(det, dict): docs.append({"text": str(det.get('Description', '')), "source": "details", "streamer": streamer, "idx": 0, "data": det, "score": 3}) # Removed adding streamer name
     return docs
 
 def score_semantic_results(results, query):
-    """Score semantic search results"""
-    query_terms = set(re.findall(r"\w+", query.lower()))
-    scored_results = []
-    
+    qt = set(re.findall(r"\w+", query.lower())); scored = []
     for doc in results:
-        # Start with semantic similarity score (already 0-100)
-        score = doc["sim_score"]
-        text = doc["text"].lower()
-        
-        # Apply source-based weighting
-        if doc["source"] == "wiki":
-            score += 15  # Wiki boost
-        elif doc["source"] == "details":
-            score += 10  # Details boost
-        elif doc["source"] == "reddit":
-            # Small boost based on Reddit score
-            reddit_score_boost = min(doc["score"] / 500, 20)
-            score += reddit_score_boost
-        
-        # Exact phrase match bonus
-        if query.lower() in text:
-            score += 30
-            
-        # Format document for output
-        formatted_doc = {
-            "source": doc["source"],
-            "name": doc["streamer"],
-            "doc": doc["text"][:150] + "..." if len(doc["text"]) > 150 else doc["text"],
-            "semantic_score": round(score, 2)
+        # --- FIX: Ensure doc is a dictionary and sim_score exists ---
+        if not isinstance(doc, dict):
+            print(f"Warning: Skipping non-dict item in score_semantic_results: {doc}")
+            continue
+        # Use .get() with a default for the base score
+        score = doc.get("sim_score", 0.0)
+        # --- End FIX ---
+
+        text = doc.get("text", "").lower() # Default to empty string
+        ss = doc.get("score", 1) # Source score (Reddit score or type score)
+
+        # --- FIX: Check if source score ss is numeric before calculation ---
+        is_numeric_ss = isinstance(ss, (int, float))
+        # --- End FIX ---
+
+        if doc["source"] == "wiki": score += 15
+        elif doc["source"] == "details": score += 10
+        elif doc["source"] == "reddit" and is_numeric_ss: # Check if numeric
+             score += min(ss / 500.0, 20) if ss > 0 else 0 # Avoid division by zero if ss=0
+        # Term frequency bonus
+        score += sum(text.count(term) * 2 for term in qt if term) # Added check 'if term'
+        # Exact phrase bonus
+        if query and query.lower() in text: score += 30 # Added check 'if query'
+
+        fmt = {
+            "source": doc.get("source", "unknown"), # Added default
+            "name": doc.get("streamer", "unknown"), # Added default
+            "doc": text[:150] + ("..." if len(text) > 150 else ""),
+            "semantic_score": round(score, 2),
+            # Optionally keep the original sim_score if needed downstream
+            "sim_score": doc.get("sim_score", 0.0)
         }
-        
-        # Add Reddit-specific fields if applicable
-        if doc["source"] == "reddit" and isinstance(doc["data"], dict):
-            formatted_doc["reddit_score"] = doc["score"]
-            formatted_doc["id"] = doc["data"].get("ID", "")
-            
-        scored_results.append((formatted_doc, score))
-    
-    # Sort by score
-    scored_results.sort(key=lambda x: x[1], reverse=True)
-    return [doc for doc, _ in scored_results]
+        if doc.get("source") == "reddit" and isinstance(doc.get("data"), dict):
+             fmt["reddit_score"] = ss # Use the retrieved ss
+             fmt["id"] = doc["data"].get("ID", "")
+        scored.append((fmt, score))
+
+    scored.sort(key=lambda x: x[1], reverse=True); return [d for d, _ in scored]
+
 
 # ───────────────────────────────────────────────────────────────────────────────
-# ⬇️ HYBRID SEARCH COMBINING BOOLEAN AND SEMANTIC SEARCH
-# -----------------------------------------------------------------------------
-def combine_search_results(boolean_results, semantic_results, boolean_weight=0.5, semantic_weight=0.5):
-    """Combine boolean and semantic search results"""
-    # Create a dictionary to store combined results
-    combined_results = {}
-    
-    # Process boolean results
+# HYBRID SEARCH COMBINING RESULTS (As before)
+# ───────────────────────────────────────────────────────────────────────────────
+def combine_search_results_weighted_simple(
+    boolean_results,
+    semantic_results,
+    boolean_weight=0.5, # Re-introduce weight
+    semantic_weight=0.5, # Re-introduce weight
+    score_threshold=5.0   # Keep threshold for single-source results
+    ):
+
+    combined_docs = {} # Key: unique_doc_id, Value: dict storing scores and doc_info
+
+    # Helper to create a unique key (same as before)
+    def get_doc_key(doc):
+        if not isinstance(doc, dict): return None
+        source = doc.get('source', 'unk')
+        streamer = doc.get('name', 'unk')
+        idx = doc.get('idx', -1)
+        doc_id = doc.get('id', None) # Reddit ID
+
+        if source == 'reddit' and doc_id:
+            return f"{source}:{streamer}:{doc_id}"
+        elif idx != -1:
+            return f"{source}:{streamer}:{idx}"
+        else:
+            return f"{source}:{streamer}:{doc.get('doc', '')[:20]}" # Fallback
+
+    # --- Step 1: Process Boolean Results ---
     for doc in boolean_results:
-        streamer = doc["name"]
-        if streamer not in combined_results:
-            combined_results[streamer] = {
-                "name": streamer,
-                "documents": [],
-                "boolean_score": 0,
-                "semantic_score": 0,
-                "combined_score": 0
+        key = get_doc_key(doc)
+        if not key: continue
+        if key not in combined_docs:
+            combined_docs[key] = {
+                "doc_info": doc.copy(),
+                "boolean_score": doc.get("boolean_score", 0.0),
+                "semantic_score": 0.0,
+                "sim_score": 0.0
             }
-        
-        # Store the document
-        combined_results[streamer]["documents"].append(doc)
-        
-        # Update boolean score (use highest score among documents)
-        if "boolean_score" in doc:
-            boolean_score = doc["boolean_score"]
-            if boolean_score > combined_results[streamer]["boolean_score"]:
-                combined_results[streamer]["boolean_score"] = boolean_score
-    
-    # Process semantic results
+        else:
+            combined_docs[key]["boolean_score"] = max(combined_docs[key]["boolean_score"], doc.get("boolean_score", 0.0))
+
+    # --- Step 2: Process Semantic Results ---
     for doc in semantic_results:
-        streamer = doc["name"]
-        if streamer not in combined_results:
-            combined_results[streamer] = {
-                "name": streamer,
-                "documents": [],
-                "boolean_score": 0,
-                "semantic_score": 0,
-                "combined_score": 0
-            }
-        
-        # Avoid duplicate documents
-        if not any(d.get("source") == doc["source"] and d.get("doc") == doc["doc"] for d in combined_results[streamer]["documents"]):
-            combined_results[streamer]["documents"].append(doc)
-        
-        # Update semantic score (use highest score among documents)
-        if "semantic_score" in doc:
-            semantic_score = doc["semantic_score"]
-            if semantic_score > combined_results[streamer]["semantic_score"]:
-                combined_results[streamer]["semantic_score"] = semantic_score
-    
-    # Calculate combined score
-    for streamer, data in combined_results.items():
-        boolean_score = data["boolean_score"]
-        semantic_score = data["semantic_score"]
-        
-        # Normalize scores (both are already on similar 0-100 scales)
-        combined_score = (boolean_score * boolean_weight) + (semantic_score * semantic_weight)
-        data["combined_score"] = round(combined_score, 2)
-    
-    # Convert to list and sort by combined score
-    result_list = list(combined_results.values())
-    result_list.sort(key=lambda x: x["combined_score"], reverse=True)
-    
-    return result_list
+        key = get_doc_key(doc)
+        if not key: continue
+
+        semantic_score = doc.get("semantic_score", 0.0) # Boosted semantic score
+        sim_score = doc.get("sim_score", 0.0) # Raw 0-100 similarity
+
+        if key not in combined_docs:
+             combined_docs[key] = {
+                 "doc_info": doc.copy(),
+                 "boolean_score": 0.0,
+                 "semantic_score": semantic_score,
+                 "sim_score": sim_score
+             }
+        else:
+            combined_docs[key]["semantic_score"] = max(combined_docs[key]["semantic_score"], semantic_score)
+            combined_docs[key]["sim_score"] = max(combined_docs[key].get("sim_score", 0.0), sim_score)
+            # Overwrite doc_info with semantic version to ensure sim_score is present and doc content might be better
+            combined_docs[key]["doc_info"] = doc.copy()
+
+    # --- Step 3: Calculate Final Score based on Weighted/Threshold Rules & Filter ---
+    scored_results = []
+    for key, data in combined_docs.items():
+        b_score = data["boolean_score"]
+        s_score = data["semantic_score"] # Use the boosted semantic score
+        final_score = 0.0
+
+        # Apply the combination logic
+        is_b_significant = b_score > 0 # Basic check if score exists
+        is_s_significant = s_score > 0 # Basic check if score exists
+
+        if is_b_significant and is_s_significant:
+            # --- Rule 1: Both present, use weighted sum ---
+            final_score = (b_score * boolean_weight) + (s_score * semantic_weight)
+        elif b_score > score_threshold and not is_s_significant:
+            # --- Rule 2a: Only boolean is above threshold ---
+            final_score = b_score
+        elif s_score > score_threshold and not is_b_significant:
+             # --- Rule 2b: Only semantic is above threshold ---
+             final_score = s_score
+        # Else: final_score remains 0.0 (both zero, or neither meets criteria)
+
+        # Only include results with a positive final score
+        if final_score > 0:
+            doc_info = data["doc_info"]
+            doc_info["final_score"] = round(final_score, 2)
+            # Ensure raw sim_score is present for display
+            doc_info["sim_score"] = round(data.get("sim_score", 0.0), 2)
+            scored_results.append(doc_info)
+
+    # --- Step 4: Group by Streamer and Sort (Same as before) ---
+    streamer_results = defaultdict(lambda: {"name": "", "documents": [], "max_final_score": 0.0})
+
+    for doc_info in scored_results:
+        streamer_name = doc_info.get("name", "unknown")
+        if streamer_name != "unknown":
+            streamer_results[streamer_name]["name"] = streamer_name
+            streamer_results[streamer_name]["documents"].append(doc_info)
+            streamer_results[streamer_name]["max_final_score"] = max(
+                streamer_results[streamer_name]["max_final_score"],
+                doc_info.get("final_score", 0.0)
+            )
+
+    final_list = list(streamer_results.values())
+    final_list.sort(key=lambda x: x["max_final_score"], reverse=True)
+    for streamer_data in final_list:
+        streamer_data["documents"].sort(key=lambda x: x.get("final_score", 0.0), reverse=True)
+
+    return final_list
 
 # ───────────────────────────────────────────────────────────────────────────────
-# ⬇️ HELPER FUNCTIONS
-# -----------------------------------------------------------------------------
+# HELPER FUNCTIONS (As before)
+# ───────────────────────────────────────────────────────────────────────────────
 def get_twitch_info(streamer_name):
-    """Get Twitch page info for a streamer if available."""
-    variants = [
-        streamer_name,
-        streamer_name.upper(),
-        streamer_name.lower(),
-        streamer_name.title(),
-        streamer_name.replace(" ", "")
-    ]
-    for name_variant in variants:
-        if name_variant in streamer_csv_data:
-            data = streamer_csv_data[name_variant]
-            if "Twitch URL" in data and data["Twitch URL"].strip():
-                return data
-            else:
-                default_url = f"https://www.twitch.tv/{streamer_name}"
-                data["url"] = default_url
-                return data
-    print(f"No Twitch data found for streamer: {streamer_name}")
-    return None
+    # (Function content remains the same as previous minimal version)
+    sun = streamer_name.upper().strip()
+    if sun in streamer_csv_data:
+        data = streamer_csv_data[sun].copy(); tu = data.get("Twitch URL", "")
+        if isinstance(tu, str) and tu.strip():
+            if "url" not in data or not data["url"]: data["url"] = tu.strip()
+            if "Name" not in data: data["Name"] = streamer_name # Ensure Name field exists
+            return data
+        else:
+            data["url"] = f"https://www.twitch.tv/{streamer_name.replace(' ', '').lower()}"
+            if "Name" not in data: data["Name"] = streamer_name # Ensure Name field exists
+            return data
+    else: return {"url": f"https://www.twitch.tv/{streamer_name.replace(' ', '').lower()}", "Name": streamer_name}
+
 
 def get_streamer_image_path(streamer_name):
-    """Get the image path for a streamer if available."""
-    image_paths = [
-        f"images/streamer_images/{streamer_name.upper()}.jpg",
-        f"images/streamer_images/{streamer_name}.jpg",
-        f"images/streamer_images/{streamer_name.lower()}.jpg",
-        f"images/streamer_images/{streamer_name.replace(' ', '')}.jpg"
-    ]
-    return image_paths[0]
+    # (Function content remains the same as previous minimal version)
+    bp = os.path.join("static", "images", "streamer_images") # Use os.path.join
+    vs = [streamer_name.upper(), streamer_name, streamer_name.lower(), streamer_name.replace(" ", ""), streamer_name.replace(" ", "_")]
+    es = [".jpg", ".png", ".jpeg", ".webp"]
+    for v in vs:
+        for e in es:
+            # Check existence using absolute path for reliability
+            abs_pp = os.path.join(BACK, bp, f"{v}{e}") # Construct absolute path
+            if os.path.exists(abs_pp):
+                # Return relative path for HTML
+                return f"images/streamer_images/{v}{e}"
+    # Ensure default exists using absolute path check if possible
+    default_img_abs = os.path.join(BACK, bp, "default.png")
+    if os.path.exists(default_img_abs):
+         return "images/streamer_images/default.png"
+    else:
+         print("Warning: Default image 'default.png' not found.")
+         return "" # Return empty string or placeholder path if default is missing
+
 
 def get_csv_streamer_info(streamer_name):
-    """Look up extra CSV info for the streamer from streamer_details.csv."""
-    name_upper = streamer_name.upper().strip()
-    return streamer_csv_data.get(name_upper, None)
+    # (Function content remains the same as previous minimal version)
+    return streamer_csv_data.get(streamer_name.upper().strip(), {}).copy()
 
 # ───────────────────────────────────────────────────────────────────────────────
-# ⬇️ INITIALIZE SEARCH INDEXES
-# -----------------------------------------------------------------------------
-# Boolean search index
-boolean_index = create_boolean_index()
+# INITIALIZE SEARCH INDEXES
+# ───────────────────────────────────────────────────────────────────────────────
+print("Initializing search system...")
 
-# BERT semantic search
-device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
-print(f"[INFO] Using device: {device.upper()}")
-model = SentenceTransformer(MODEL_NAME, device=device)
+# --- Boolean Index (Loads or builds as before) ---
+boolean_index = None
+try:
+    if os.path.exists(BOOLEAN_INDEX_PATH):
+        with open(BOOLEAN_INDEX_PATH, "rb") as f: boolean_index = pickle.load(f); print(f"Loaded boolean index: {BOOLEAN_INDEX_PATH}")
+    else:
+        print("Building boolean index..."); boolean_index = create_boolean_index()
+        with open(BOOLEAN_INDEX_PATH, "wb") as f: pickle.dump(boolean_index, f); print(f"Boolean index saved: {BOOLEAN_INDEX_PATH}")
+except Exception as e:
+    print(f"Error boolean index: {e}. Rebuilding..."); boolean_index = create_boolean_index() # Attempt rebuild
+    try:
+        with open(BOOLEAN_INDEX_PATH, "wb") as f: pickle.dump(boolean_index, f); print(f"Boolean index rebuilt: {BOOLEAN_INDEX_PATH}")
+    except Exception as e_rebuild: print(f"FATAL: Failed rebuild boolean index: {e_rebuild}. Exiting."); sys.exit(1)
+
+# --- SentenceTransformer Model ---
+print(f"Loading SentenceTransformer model: {MODEL_NAME}")
+try: model = SentenceTransformer(MODEL_NAME, device="cpu")
+except Exception as e: print(f"Error loading SBERT model: {e}. Exiting."); sys.exit(1)
 
 # Verify embedding dimension
-embedding_test = model.encode(["Test sentence"], convert_to_numpy=True)
-actual_dim = embedding_test.shape[1]
-if actual_dim != EMBED_DIM:
-    print(f"[WARNING] Expected embedding dimension {EMBED_DIM}, but model produces {actual_dim} dimensions")
-    EMBED_DIM = actual_dim  # Update to actual dimension
+try:
+    actual_dim = model.encode(["Test"], convert_to_numpy=True).shape[1]
+    if actual_dim != EMBED_DIM: print(f"Warning: Model dim ({actual_dim}) != config ({EMBED_DIM}). Using {actual_dim}."); EMBED_DIM = actual_dim
+except Exception as e: print(f"Warning: Could not verify model dimension: {e}. Using config ({EMBED_DIM})")
 
-if BUILD_INDEX or not (os.path.exists(EMBED_PATH) and os.path.exists(META_PATH)):
-    DOCS = gather_documents()
-    print(f"[BERT] Encoding {len(DOCS)} documents...")
-    EMBEDDINGS = model.encode(
-        [d["text"] for d in DOCS],
-        batch_size=32,
-        show_progress_bar=True,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-    ).astype("float32")
-    
-    # Verify embedding dimension
+# --- Load or Build FP16 Embeddings ---
+DOCS = []
+EMBEDDINGS = None
+embeddings_loaded = False
+loaded_embedding_dtype = None
+
+build_target_path = EMBED_PATH_FP16
+build_target_dtype = np.float16
+loaded_path = None
+
+if os.path.exists(EMBED_PATH_FP16) and os.path.exists(META_PATH):
+    try:
+        print(f"Attempting load FP16 embeddings: {EMBED_PATH_FP16}...")
+        EMBEDDINGS = np.load(EMBED_PATH_FP16)
+        with open(META_PATH, "rb") as f: DOCS = pickle.load(f)
+        loaded_path = EMBED_PATH_FP16
+        embeddings_loaded = True
+    except Exception as e:
+        print(f"Warning: Failed load FP16: {e}. Checking fallback path.")
+        EMBEDDINGS, DOCS, embeddings_loaded = None, [], False
+
+if not embeddings_loaded and os.path.exists(EMBED_PATH_FP32_FALLBACK) and os.path.exists(META_PATH):
+     try:
+        print(f"Attempting load fallback embeddings: {EMBED_PATH_FP32_FALLBACK}...")
+        EMBEDDINGS = np.load(EMBED_PATH_FP32_FALLBACK)
+        if EMBEDDINGS.dtype != EXPECTED_EMBED_DTYPE:
+             print(f"Warning: Loaded fallback '{EMBED_PATH_FP32_FALLBACK}' dtype {EMBEDDINGS.dtype}, expected {EXPECTED_EMBED_DTYPE}.")
+             print(f"Attempting conversion to {EXPECTED_EMBED_DTYPE}...")
+             EMBEDDINGS = EMBEDDINGS.astype(EXPECTED_EMBED_DTYPE)
+             print(f"Conversion complete. New dtype: {EMBEDDINGS.dtype}")
+             gc.collect()
+        with open(META_PATH, "rb") as f: DOCS = pickle.load(f)
+        loaded_path = EMBED_PATH_FP32_FALLBACK
+        embeddings_loaded = True
+     except Exception as e:
+         print(f"Warning: Failed load fallback {EMBED_PATH_FP32_FALLBACK}: {e}. Will attempt build.")
+         EMBEDDINGS, DOCS, embeddings_loaded = None, [], False
+
+if embeddings_loaded:
+    loaded_embedding_dtype = EMBEDDINGS.dtype
+    print(f"Embeddings loaded from {loaded_path}. Shape: {EMBEDDINGS.shape}, Dtype: {loaded_embedding_dtype}")
+    if loaded_embedding_dtype != EXPECTED_EMBED_DTYPE:
+         print(f"Warning: Final loaded dtype {loaded_embedding_dtype} doesn't match expected {EXPECTED_EMBED_DTYPE}. Forcing rebuild.")
+         embeddings_loaded = False
+    # Ensure loaded dimension matches the *verified* model dimension
+    elif EMBEDDINGS.shape[1] != EMBED_DIM:
+         print(f"Error: Loaded dim ({EMBEDDINGS.shape[1]}) != verified model dim ({EMBED_DIM}). Forcing rebuild.")
+         embeddings_loaded = False
+    elif len(DOCS) != EMBEDDINGS.shape[0]:
+        print(f"Error: Mismatch metadata ({len(DOCS)}) vs embeddings ({EMBEDDINGS.shape[0]}). Forcing rebuild.")
+        embeddings_loaded = False
+    else: print(f"OK: {len(DOCS)} documents and embeddings match.")
+
+if not embeddings_loaded and BUILD_INDEX_ON_MISSING:
+    print(f"Building semantic embeddings (Target: {build_target_dtype})...")
+    DOCS = gather_documents();
+    if not DOCS: print("Error: No documents to embed. Exiting."); sys.exit(1)
+    print(f"Encoding {len(DOCS)} documents...")
+    try:
+        EMBEDDINGS = model.encode(
+            [d.get("text","") for d in DOCS], # Use .get for safety
+             batch_size=32, show_progress_bar=True,
+            convert_to_numpy=True, normalize_embeddings=True
+        ).astype(build_target_dtype)
+
+        loaded_embedding_dtype = EMBEDDINGS.dtype
+        print(f"Embeddings generated: Shape {EMBEDDINGS.shape}, Dtype {loaded_embedding_dtype}")
+        if loaded_embedding_dtype != EXPECTED_EMBED_DTYPE:
+             print(f"Warning: Built dtype {loaded_embedding_dtype} != expected {EXPECTED_EMBED_DTYPE}?")
+
+        np.save(build_target_path, EMBEDDINGS); print(f"Embeddings saved: {build_target_path}")
+        with open(META_PATH, "wb") as f: pickle.dump(DOCS, f); print(f"Metadata saved: {META_PATH}")
+        embeddings_loaded = True
+    except Exception as e: print(f"Error during embedding build: {e}. Exiting."); sys.exit(1)
+elif not embeddings_loaded:
+    print("Error: Embeddings missing & build disabled/failed. Exiting."); sys.exit(1)
+
+if not embeddings_loaded or EMBEDDINGS is None or EMBEDDINGS.dtype != EXPECTED_EMBED_DTYPE or len(DOCS) != EMBEDDINGS.shape[0]:
+    print(f"FATAL: Embeddings not ready or inconsistent before FAISS init. Exiting.")
+    sys.exit(1)
+
+# --- Initialize FAISS Index with FP16 and L2 Distance ---
+print(f"Initializing FAISS index with L2 distance for {EXPECTED_EMBED_DTYPE} data...")
+index = None
+embeddings_successfully_added = False
+try:
+    if not EMBEDDINGS.flags['C_CONTIGUOUS']:
+        print("Embeddings not C-contiguous. Making copy...")
+        EMBEDDINGS = np.ascontiguousarray(EMBEDDINGS)
+        gc.collect()
+
     if EMBEDDINGS.shape[1] != EMBED_DIM:
-        print(f"[WARNING] Embedding dimension mismatch: expected {EMBED_DIM}, got {EMBEDDINGS.shape[1]}")
-    
-    print(f"[INFO] Created embeddings with shape {EMBEDDINGS.shape}")
-    
-    np.save(EMBED_PATH, EMBEDDINGS)
-    with open(META_PATH, "wb") as f:
-        pickle.dump(DOCS, f)
-    print("Embeddings + metadata saved. Exiting after build.")
-    sys.exit(0)
+         print(f"FATAL Error: Data dim ({EMBEDDINGS.shape[1]}) mismatch config ({EMBED_DIM}). Exiting.")
+         sys.exit(1)
+
+    index = faiss.IndexFlatL2(EMBED_DIM)
+    index.add(EMBEDDINGS)
+    print(f"FAISS index created (IndexFlatL2) with {index.ntotal} vectors (dtype: {EMBEDDINGS.dtype}).")
+    if index.ntotal != len(DOCS):
+         print(f"Warning: FAISS index count ({index.ntotal}) != DOCS count ({len(DOCS)}).")
+    embeddings_successfully_added = True
+
+except Exception as e:
+    print(f"Error initializing/populating FAISS index: {e}")
+    if EMBEDDINGS is not None: # Check if EMBEDDINGS exists before accessing attributes
+        print(f"Context: Data shape: {EMBEDDINGS.shape}, dtype: {EMBEDDINGS.dtype}, dim: {EMBED_DIM}")
+    else:
+        print("Context: EMBEDDINGS variable is None.")
+    sys.exit(1)
+
+# --- Attempt to release original embeddings memory ---
+if embeddings_successfully_added:
+    if 'EMBEDDINGS' in locals() and EMBEDDINGS is not None:
+        print("Attempting to release original embeddings array memory...")
+        try:
+            del EMBEDDINGS
+            gc.collect()
+            print("Original embeddings array deleted, gc collected.")
+        except Exception as e_del:
+            print(f"Warning: Error occurred during embeddings deletion/gc: {e_del}")
+    else:
+         print("Embeddings variable already released or not assigned.")
 else:
-    DOCS = pickle.load(open(META_PATH, "rb"))
-    EMBEDDINGS = np.load(EMBED_PATH)
-    
-    # Verify loaded embedding dimension
-    if EMBEDDINGS.shape[1] != EMBED_DIM:
-        print(f"[WARNING] Loaded embeddings dimension {EMBEDDINGS.shape[1]} differs from configured {EMBED_DIM}")
-        EMBED_DIM = EMBEDDINGS.shape[1]  # Update to actual dimension
-
-# Initialize FAISS index for similarity search
-index = faiss.IndexFlatIP(EMBED_DIM)  # Use explicit dimension
-index.add(EMBEDDINGS)
-print(f"[FAISS] {index.ntotal} vectors indexed → dim {EMBED_DIM}")
+    print("Skipping embeddings deletion because FAISS add failed.")
 
 # ───────────────────────────────────────────────────────────────────────────────
-# ⬇️ FLASK SERVER
-# -----------------------------------------------------------------------------
-app = Flask(__name__)
+# FLASK SERVER
+# ───────────────────────────────────────────────────────────────────────────────
+app = Flask(__name__, static_folder='static')
 CORS(app)
 
 @app.route("/")
-def home():
-    return render_template("base.html", title="Streamer Search")
+def home(): return render_template("base.html", title="Streamer Search")
 
 @app.route("/search")
 def search_streamer():
-    query = request.args.get("name", "").strip()
-    if not query:
-        return jsonify([])
-    
-    print(f"[SEARCH] Query: '{query}'")
-    
-    # 1. Perform Boolean search
-    print("[SEARCH] Performing Boolean search...")
-    boolean_raw_results = boolean_search(query, boolean_index)
-    boolean_results = score_boolean_results(boolean_raw_results, query)
-    
-    # 2. Perform BERT semantic search
-    print("[SEARCH] Performing BERT semantic search...")
-    q_emb = model.encode(query, convert_to_numpy=True, normalize_embeddings=True)
-    D, I = index.search(q_emb.reshape(1, -1), TOP_K)
-    
-    # Prepare semantic results
-    semantic_raw_results = []
-    for score, idx in zip(D[0], I[0]):
-        if idx == -1: 
-            continue
-        meta = DOCS[idx]
-        
-        # Convert similarity score to 0-100 scale
-        sim_score = float(score) * 100
-        
-        # Format document for output
-        formatted_doc = {
-            "source": meta["source"],
-            "streamer": meta["streamer"],
-            "text": meta["text"],
-            "score": meta.get("score", 1),
-            "data": meta.get("data", {}),
-            "sim_score": round(sim_score, 2)
-        }
-        
-        # Add Reddit-specific fields if applicable
-        if meta["source"] == "reddit" and isinstance(meta["data"], dict):
-            formatted_doc["reddit_score"] = meta["score"]
-            formatted_doc["id"] = meta["data"].get("ID", "")
-            
-        semantic_raw_results.append(formatted_doc)
-    
-    semantic_results = score_semantic_results(semantic_raw_results, query)
-    
-    # 3. Combine results
-    print("[SEARCH] Combining search results...")
-    combined_results = combine_search_results(
-        boolean_results, 
-        semantic_results, 
-        boolean_weight=BOOLEAN_WEIGHT, 
-        semantic_weight=SEMANTIC_WEIGHT
-    )
-    
-    # 4. Add streamer info to results
-    print("[SEARCH] Adding streamer info...")
-    final_results = []
-    
-    for result in combined_results[:10]:  # Take top 10
-        streamer = result["name"]
-        
-        # Clean the documents for display
-        cleaned_documents = []
-        for doc in result["documents"]:
-            # Clean up text for display (remove streamer name if appended and truncate)
-            display_text = doc.get("doc", "")
-            
-            # Create clean document for output
-            display_doc = {
-                "source": doc.get("source", ""),
-                "name": streamer,
-                "doc": display_text,
-                "sim_score": doc.get("semantic_score", doc.get("boolean_score", 0))
-            }
-            
-            # Add Reddit-specific fields if present
-            if "reddit_score" in doc:
-                display_doc["reddit_score"] = doc["reddit_score"]
-            if "id" in doc:
-                display_doc["id"] = doc["id"]
-                
-            cleaned_documents.append(display_doc)
-        
-        # Add streamer info
-        final_results.append({
-            "name": streamer,
-            "documents": cleaned_documents,
-            "twitch_info": get_twitch_info(streamer),
-            "image_path": get_streamer_image_path(streamer),
-            "csv_data": get_csv_streamer_info(streamer)
+    query = request.args.get("name", "").strip();
+    if not query: return jsonify([])
+    print(f"\n--- Query: '{query}' ---")
+
+    # 1. Boolean Search
+    bool_raw = boolean_search(query, boolean_index)
+    bool_res = score_boolean_results(bool_raw, query)
+
+    # 2. Semantic Search
+    sem_raw = []
+    try:
+        q_emb = model.encode([query], convert_to_numpy=True, normalize_embeddings=True).astype(EXPECTED_EMBED_DTYPE)
+
+        if q_emb.shape[1] != index.d:
+            print(f"Error: Query dim ({q_emb.shape[1]}) != index dim ({index.d}). Skipping semantic.")
+        else:
+            D, I = index.search(q_emb, TOP_K)
+
+            for L2_dist_sq, idx in zip(D[0], I[0]):
+                if idx == -1 or idx >= len(DOCS): continue
+                # --- FIX: Check if L2_dist_sq is valid ---
+                if not math.isfinite(L2_dist_sq) or L2_dist_sq < 0:
+                    print(f"Warning: Skipping result with invalid L2 distance squared: {L2_dist_sq} for index {idx}")
+                    continue
+                # --- End FIX ---
+
+                meta = DOCS[idx]
+                # Ensure meta is a dict before proceeding
+                if not isinstance(meta, dict):
+                    print(f"Warning: Skipping result with non-dict metadata at index {idx}")
+                    continue
+
+                cosine_similarity = 1.0 - (L2_dist_sq / 2.0)
+                # Clamp similarity to [0, 1] range before scaling
+                sim_score = max(0.0, min(1.0, cosine_similarity)) * 100
+
+                sem_raw.append({
+                    "source": meta.get("source", "unknown"), # Use .get
+                    "streamer": meta.get("streamer", "unknown"), # Use .get
+                    "text": meta.get("text", ""), # Use .get
+                    "score": meta.get("score", 1), # Original source score
+                    "data": meta.get("data", {}),
+                    "sim_score": round(sim_score, 2), # The 0-100 similarity score
+                })
+    except Exception as e: print(f"Error semantic search: {e}")
+
+    sem_res = score_semantic_results(sem_raw, query)
+
+    # 3. Combine Results
+    comb_res = combine_search_results_weighted_simple(
+    bool_res, sem_res,
+    boolean_weight=BOOLEAN_WEIGHT,      # Use weight from config
+    semantic_weight=SEMANTIC_WEIGHT,    # Use weight from config
+    score_threshold=5.0                 # Adjust threshold if needed
+)
+    # 4. Format Final Output
+    final_res = []
+    for sd in comb_res[:10]: # Still limit streamers to top 10 overall
+        sn = sd.get("name", "Unknown Streamer") # Use .get
+        # --- FIX: Limit documents per streamer to 4 ---
+        docs_limited = sd.get("documents", [])[:4]
+        # --- End FIX ---
+
+        final_res.append({
+            "name": sn,
+            "documents": docs_limited, # Use the limited list
+            "twitch_info": get_twitch_info(sn),
+            "image_path": get_streamer_image_path(sn),
+            "csv_data": get_csv_streamer_info(sn),
+            "max_combined_score": sd.get("max_final_score", 0.0) # Use max_final_score here
         })
-    
-    # 5. Sort by combined score
-    final_results.sort(
-        key=lambda x: next((doc["sim_score"] for doc in x["documents"] if doc["sim_score"] > 0), 0),
-        reverse=True
-    )
-    
-    return jsonify(final_results)
+
+    print(f"Returning {len(final_res)} combined streamer results.")
+    return jsonify(final_res)
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5001) #checking
+    if boolean_index is None or index is None or model is None or not DOCS:
+        print("Error: Indexes or model not loaded properly. Exiting."); sys.exit(1)
+    print("\n--- Starting Flask Server ---")
+    app.run(debug=False, host="0.0.0.0", port=5001) #12
