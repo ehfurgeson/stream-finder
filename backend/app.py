@@ -1,3 +1,4 @@
+import json
 import os
 import pickle
 import numpy as np
@@ -10,14 +11,8 @@ import time
 # Set ROOT_PATH for linking files
 os.environ["ROOT_PATH"] = os.path.abspath(os.path.join("..", os.curdir))
 
-
-# ───────────────────────────────────────────────────────────────────────────────
-# CONFIG
-# ───────────────────────────────────────────────────────────────────────────────
-MODEL_NAME   = "sentence-transformers/all-MiniLM-L6-v2"
-META_PATH    = "metadata.pkl"
-BOOLEAN_INDEX_PATH = "boolean_index.pkl"
-
+# Get the directory of the current script (backend folder)
+current_directory = os.path.dirname(os.path.abspath(__file__))
 
 # Define models directory
 models_dir = os.path.join(current_directory, "models")
@@ -41,14 +36,9 @@ streamer_csv = pd.read_csv(csv_path).fillna("")  # Safely fill NaNs with empty s
 
 # Convert CSV rows into a dict keyed by uppercase Name
 streamer_csv_data = {}
-CSV_PATH = os.path.join(BACK, "streamer_details.csv")
-if os.path.exists(CSV_PATH):
-    try:
-        streamer_csv = pd.read_csv(CSV_PATH).fillna("")
-        streamer_csv_data = {str(r["Name"]).upper().strip(): dict(r) for _, r in streamer_csv.iterrows()}
-    except Exception as e: print(f"Warning: Could not load/parse {CSV_PATH}: {e}")
-else: print(f"Info: {CSV_PATH} not found.")
-
+for _, row in streamer_csv.iterrows():
+    name_upper = str(row["Name"]).upper().strip()
+    streamer_csv_data[name_upper] = dict(row)
 
 
 class OptimizedTFIDFSVDSearch:
@@ -212,67 +202,41 @@ class OptimizedTFIDFSVDSearch:
         return self.s
 
 
-    for doc_info in scored_results:
-        streamer_name = doc_info.get("name", "unknown")
-        if streamer_name != "unknown":
-            streamer_results[streamer_name]["name"] = streamer_name
-            streamer_results[streamer_name]["documents"].append(doc_info)
-            streamer_results[streamer_name]["max_final_score"] = max(
-                streamer_results[streamer_name]["max_final_score"],
-                doc_info.get("final_score", 0.0)
-            )
-
-    final_list = list(streamer_results.values())
-    final_list.sort(key=lambda x: x["max_final_score"], reverse=True)
-    for streamer_data in final_list:
-        streamer_data["documents"].sort(key=lambda x: x.get("final_score", 0.0), reverse=True)
-
-    return final_list
-
-# ───────────────────────────────────────────────────────────────────────────────
-# HELPER FUNCTIONS (As before)
-# ───────────────────────────────────────────────────────────────────────────────
 def get_twitch_info(streamer_name):
-    # (Function content remains the same as previous minimal version)
-    sun = streamer_name.upper().strip()
-    if sun in streamer_csv_data:
-        data = streamer_csv_data[sun].copy(); tu = data.get("Twitch URL", "")
-        if isinstance(tu, str) and tu.strip():
-            if "url" not in data or not data["url"]: data["url"] = tu.strip()
-            if "Name" not in data: data["Name"] = streamer_name # Ensure Name field exists
-            return data
-        else:
-            data["url"] = f"https://www.twitch.tv/{streamer_name.replace(' ', '').lower()}"
-            if "Name" not in data: data["Name"] = streamer_name # Ensure Name field exists
-            return data
-    else: return {"url": f"https://www.twitch.tv/{streamer_name.replace(' ', '').lower()}", "Name": streamer_name}
-
+    """Get Twitch page info for a streamer if available."""
+    variants = [
+        streamer_name,
+        streamer_name.upper(),
+        streamer_name.lower(),
+        streamer_name.title(),
+        streamer_name.replace(" ", "")
+    ]
+    for name_variant in variants:
+        if name_variant in streamer_csv_data:
+            data = streamer_csv_data[name_variant]
+            if "Twitch URL" in data and data["Twitch URL"].strip():
+                return data
+            else:
+                default_url = f"https://www.twitch.tv/{streamer_name}"
+                data["url"] = default_url
+                return data
+    print(f"No Twitch data found for streamer: {streamer_name}")
+    return None
 
 def get_streamer_image_path(streamer_name):
-    # (Function content remains the same as previous minimal version)
-    bp = os.path.join("static", "images", "streamer_images") # Use os.path.join
-    vs = [streamer_name.upper(), streamer_name, streamer_name.lower(), streamer_name.replace(" ", ""), streamer_name.replace(" ", "_")]
-    es = [".jpg", ".png", ".jpeg", ".webp"]
-    for v in vs:
-        for e in es:
-            # Check existence using absolute path for reliability
-            abs_pp = os.path.join(BACK, bp, f"{v}{e}") # Construct absolute path
-            if os.path.exists(abs_pp):
-                # Return relative path for HTML
-                return f"images/streamer_images/{v}{e}"
-    # Ensure default exists using absolute path check if possible
-    default_img_abs = os.path.join(BACK, bp, "default.png")
-    if os.path.exists(default_img_abs):
-         return "images/streamer_images/default.png"
-    else:
-         print("Warning: Default image 'default.png' not found.")
-         return "" # Return empty string or placeholder path if default is missing
-
+    """Get the image path for a streamer if available."""
+    image_paths = [
+        f"images/streamer_images/{streamer_name.upper()}.jpg",
+        f"images/streamer_images/{streamer_name}.jpg",
+        f"images/streamer_images/{streamer_name.lower()}.jpg",
+        f"images/streamer_images/{streamer_name.replace(' ', '')}.jpg"
+    ]
+    return image_paths[0]
 
 def get_csv_streamer_info(streamer_name):
-    # (Function content remains the same as previous minimal version)
-    return streamer_csv_data.get(streamer_name.upper().strip(), {}).copy()
-
+    """Look up extra CSV info for the streamer from streamer_details.csv."""
+    name_upper = streamer_name.upper().strip()
+    return streamer_csv_data.get(name_upper, None)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -291,9 +255,9 @@ else:
     search_engine.preprocess_documents(reddit_data, twitter_data, wiki_data, details_data)
     search_engine.fit()
 
-
 @app.route("/")
-def home(): return render_template("base.html", title="Streamer Search")
+def home():
+    return render_template("base.html", title="Streamer Search")
 
 @app.route("/search")
 def search_streamer():
@@ -349,4 +313,3 @@ def analyze_svd():
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5001)
-
