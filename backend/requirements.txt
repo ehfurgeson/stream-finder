@@ -1,6 +1,7 @@
 ﻿Flask==2.2.2
 Flask-Cors==3.0.10
+Werkzeug==2.2.3
 numpy>=1.26.4
 pandas>=2.2.1
-scikit-learn>=1.3.0  # For normalize and other sklearn functions
-gunicorn==20.1.0     # For deployment
+scikit-learn>=1.3.0
+gunicorn==20.1.0
